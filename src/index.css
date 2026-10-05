@@ -1,0 +1,167 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --bg: #f4f4f7;
+  --surface: #ffffff;
+  --surface-2: #f0f0f4;
+  --surface-3: #e6e6ec;
+  --line: rgba(16, 16, 32, 0.08);
+  --ink: #101018;
+  --ink-2: #4e4e60;
+  --muted: #858599;
+  --brand: #6655f5;
+  --brand-ink: #ffffff;
+  --brand-soft: rgba(102, 85, 245, 0.1);
+  --good: #0b8a5b;
+  --good-soft: rgba(11, 138, 91, 0.1);
+  --bad: #d63c41;
+  --bad-soft: rgba(214, 60, 65, 0.1);
+  --warn: #b97800;
+  --warn-soft: rgba(245, 165, 36, 0.14);
+  --info: #2f6fd0;
+  --info-soft: rgba(47, 111, 208, 0.1);
+  --chart-grid: #e4e3dd;
+  --chart-axis: #898781;
+  --series-income: #1baf7a;
+  --series-expense: #eb6834;
+  --series-current: #2a78d6;
+  --series-previous: #b9b8b1;
+  --shadow: 0 1px 2px rgba(16, 16, 32, 0.04), 0 4px 16px rgba(16, 16, 32, 0.05);
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: #0b0b11;
+  --surface: #15151e;
+  --surface-2: #1c1c27;
+  --surface-3: #262633;
+  --line: rgba(255, 255, 255, 0.07);
+  --ink: #f3f3f7;
+  --ink-2: #b6b6c8;
+  --muted: #7d7d93;
+  --brand: #8b7dff;
+  --brand-ink: #0b0b11;
+  --brand-soft: rgba(139, 125, 255, 0.14);
+  --good: #3ccf91;
+  --good-soft: rgba(60, 207, 145, 0.12);
+  --bad: #ff6b6f;
+  --bad-soft: rgba(255, 107, 111, 0.12);
+  --warn: #f5b13d;
+  --warn-soft: rgba(245, 177, 61, 0.13);
+  --info: #6ea8ff;
+  --info-soft: rgba(110, 168, 255, 0.12);
+  --chart-grid: #2a2a35;
+  --chart-axis: #898781;
+  --series-income: #199e70;
+  --series-expense: #d95926;
+  --series-current: #3987e5;
+  --series-previous: #55556a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+@theme inline {
+  --font-sans: 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-soft: var(--brand-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --shadow-card: var(--shadow);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+button,
+a,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='time']::-webkit-calendar-picker-indicator {
+  opacity: 0.6;
+}
+.dark input[type='date']::-webkit-calendar-picker-indicator,
+.dark input[type='time']::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Fondo del saldo principal */
+.hero-gradient {
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(255, 255, 255, 0.18) 0%, transparent 45%),
+    radial-gradient(90% 120% at 0% 100%, rgba(0, 0, 0, 0.22) 0%, transparent 55%),
+    linear-gradient(135deg, #4f46e5 0%, #6d4fe8 40%, #9b4fd6 75%, #c2508f 100%);
+}
+
+/* Recharts: sin contorno al hacer foco/tap */
+.recharts-wrapper *:focus,
+.recharts-surface:focus {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
