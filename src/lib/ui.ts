@@ -27,6 +27,16 @@ export type SheetState =
   | { kind: 'account'; id?: ID }
   | { kind: 'category'; id?: ID; categoryKind?: 'expense' | 'income' }
   | { kind: 'budget'; id?: ID }
+  /** Escanear boleta: con `file` parte procesando esa imagen (p. ej. compartida desde la galería) */
+  | { kind: 'scan'; file?: Blob }
+  /** Ver la foto de una boleta guardada */
+  | { kind: 'receipt'; id: ID }
+  /** Importar cartola del banco (CSV / Excel) */
+  | { kind: 'import' }
+  /** Registro rápido escribiendo o dictando: "5 lucas uber" */
+  | { kind: 'quick'; text?: string; voice?: boolean }
+  /** Dividir una cuenta entre varias personas */
+  | { kind: 'split' }
 
 interface UIState {
   toasts: Toast[]

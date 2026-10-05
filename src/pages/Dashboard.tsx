@@ -1,7 +1,19 @@
 import { motion } from 'motion/react'
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Eye, EyeOff, HandCoins, Plus, Settings, Sparkles } from 'lucide-react'
+import {
+  ArrowDownLeft,
+  ArrowLeftRight,
+  ArrowUpRight,
+  Camera,
+  Eye,
+  EyeOff,
+  HandCoins,
+  Plus,
+  Settings,
+  Sparkles,
+  Split,
+} from 'lucide-react'
 import { addDaysStr, fmtInDays, fmtMonth, monthKey, parseDate } from '../lib/dates'
 import {
   byCategory,
@@ -23,6 +35,7 @@ import { CategoryDonut, CategoryList, CumulativeChart } from '../components/char
 import { InsightCard } from '../components/InsightCard'
 import { Avatar } from '../components/forms/LoanForms'
 import { TxItem } from '../components/TxItem'
+import { QuickAddBar } from '../features/quick/QuickAddBar'
 import { AnimatedMoney, Card, cx, DeltaPill, EmptyState, IconButton, ProgressBar, Ring, SectionHeader } from '../components/ui'
 
 const greeting = () => {
@@ -136,8 +149,11 @@ export default function Dashboard() {
             )}
           </section>
 
+          {/* Registro rápido escribiendo o dictando */}
+          <QuickAddBar />
+
           {/* Acciones rápidas */}
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
             {[
               {
                 label: 'Gasto',
@@ -150,6 +166,18 @@ export default function Dashboard() {
                 icon: ArrowDownLeft,
                 onClick: () => openSheet({ kind: 'tx', type: 'income' }),
                 cls: 'text-good',
+              },
+              {
+                label: 'Escanear boleta',
+                icon: Camera,
+                onClick: () => openSheet({ kind: 'scan' }),
+                cls: 'text-[var(--series-current)]',
+              },
+              {
+                label: 'Dividir cuenta',
+                icon: Split,
+                onClick: () => openSheet({ kind: 'split' }),
+                cls: 'text-warn',
               },
               {
                 label: 'Transferir',
@@ -171,7 +199,7 @@ export default function Dashboard() {
                 <span className={cx('flex size-10 items-center justify-center rounded-2xl bg-surface-2', a.cls)}>
                   <a.icon className="size-5" strokeWidth={2.4} />
                 </span>
-                <span className="text-xs font-semibold">{a.label}</span>
+                <span className="text-center text-xs leading-tight font-semibold">{a.label}</span>
               </motion.button>
             ))}
           </div>

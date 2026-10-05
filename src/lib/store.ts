@@ -58,6 +58,8 @@ export interface Actions {
   updateSettings: (patch: Partial<Settings>) => void
 
   addTransaction: (tx: New<Transaction>) => Transaction
+  /** Agrega varios movimientos en una sola actualización (importar cartola) */
+  addTransactions: (txs: New<Transaction>[]) => Transaction[]
   updateTransaction: (id: ID, patch: Partial<Transaction>) => void
   deleteTransaction: (id: ID) => Transaction | undefined
   restoreTransaction: (tx: Transaction) => void
@@ -120,6 +122,11 @@ export const useStore = create<Store>()(
         const t: Transaction = { time: nowTime(), ...tx, id: uid(), createdAt: nowIso() }
         setState((s) => ({ transactions: [...s.transactions, t] }))
         return t
+      },
+      addTransactions: (txs) => {
+        const created = txs.map((tx) => ({ ...tx, id: uid(), createdAt: nowIso() }) as Transaction)
+        if (created.length) setState((s) => ({ transactions: [...s.transactions, ...created] }))
+        return created
       },
       updateTransaction: (id, patch) =>
         setState((s) => ({ transactions: s.transactions.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),

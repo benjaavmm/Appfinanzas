@@ -1,5 +1,18 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { Download, FileSpreadsheet, Lock, Monitor, Moon, RotateCcw, Smartphone, Sparkles, Sun, Trash, Upload } from 'lucide-react'
+import {
+  Download,
+  FileSpreadsheet,
+  FileUp,
+  Lock,
+  Monitor,
+  Moon,
+  RotateCcw,
+  Smartphone,
+  Sparkles,
+  Sun,
+  Trash,
+  Upload,
+} from 'lucide-react'
 import { exportCSV, exportJSON, hashPin, parseBackup } from '../lib/backup'
 import { buildDemoData } from '../lib/demo'
 import { CURRENCIES } from '../lib/format'
@@ -7,7 +20,8 @@ import { fmtDate, toDateStr } from '../lib/dates'
 import { useData } from '../lib/hooks'
 import { forceUpdate, isIOS, promptInstall, usePwa } from '../lib/pwa'
 import { useStore } from '../lib/store'
-import { ask, toast } from '../lib/ui'
+import { ask, openSheet, toast } from '../lib/ui'
+import { RemindersCard } from '../features/reminders/RemindersCard'
 import type { ThemePref } from '../lib/types'
 import { PinPad } from '../components/PinPad'
 import { Button, Card, Field, Input, PageHeader, Segmented, Select, Toggle } from '../components/ui'
@@ -190,6 +204,14 @@ export default function Settings() {
             >
               Exportar movimientos a Excel (CSV)
             </Button>
+            <Button
+              variant="soft"
+              icon={<FileUp className="size-4" />}
+              onClick={() => openSheet({ kind: 'import' })}
+              className="sm:col-span-2"
+            >
+              Importar cartola del banco
+            </Button>
           </div>
           <input
             ref={fileRef}
@@ -203,6 +225,8 @@ export default function Settings() {
             }}
           />
         </Card>
+
+        <RemindersCard />
 
         <Card>
           <h2 className="mb-1 font-bold">Instalar en tu teléfono</h2>

@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { Download, Search, X } from 'lucide-react'
+import { Download, FileUp, Search, X } from 'lucide-react'
 import { fmtRelativeDay, monthKey } from '../lib/dates'
 import { groupByDay, sumType } from '../lib/finance'
 import { normalizeText } from '../lib/format'
@@ -65,6 +65,9 @@ export default function Transactions() {
           <>
             <IconButton label="Buscar" onClick={() => setSearching((s) => !s)}>
               {searching ? <X className="size-5" /> : <Search className="size-5" />}
+            </IconButton>
+            <IconButton label="Importar cartola del banco" onClick={() => openSheet({ kind: 'import' })}>
+              <FileUp className="size-5" />
             </IconButton>
             <IconButton label="Exportar a Excel (CSV)" onClick={() => exportCSV(data)}>
               <Download className="size-5" />

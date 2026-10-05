@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Split } from 'lucide-react'
 import { fmtDate, fmtInDays } from '../lib/dates'
 import { debtTotals, loanRemaining, loanStatus, peopleSummary } from '../lib/finance'
 import { useData, useMoney, useToday } from '../lib/hooks'
@@ -72,9 +72,19 @@ export default function Loans() {
         title="Préstamos"
         subtitle="Quién te debe y a quién le debes"
         actions={
-          <Button size="sm" onClick={() => openSheet({ kind: 'loan' })} icon={<Plus className="size-4" />}>
-            Nuevo
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => openSheet({ kind: 'split' })}
+              icon={<Split className="size-4" />}
+            >
+              Dividir
+            </Button>
+            <Button size="sm" onClick={() => openSheet({ kind: 'loan' })} icon={<Plus className="size-4" />}>
+              Nuevo
+            </Button>
+          </>
         }
       />
 

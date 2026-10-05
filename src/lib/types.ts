@@ -46,6 +46,10 @@ export interface Transaction {
   place?: string
   note?: string
   subscriptionId?: ID
+  /** Foto de la boleta guardada en el dispositivo (ver src/lib/files.ts) */
+  receiptId?: ID
+  /** Movimiento creado al dividir una cuenta (agrupa el gasto propio y los préstamos) */
+  splitId?: ID
   createdAt: string
 }
 
@@ -71,6 +75,8 @@ export interface Loan {
   accountId?: ID
   note?: string
   payments: LoanPayment[]
+  /** Préstamo creado al dividir una cuenta */
+  splitId?: ID
   createdAt: string
 }
 
@@ -116,6 +122,18 @@ export interface Goal {
 
 export type ThemePref = 'system' | 'light' | 'dark'
 
+export interface ReminderSettings {
+  enabled: boolean
+  /** Cobros de suscripciones (con N días de anticipación) */
+  subscriptions: boolean
+  /** Préstamos que vencen o están atrasados */
+  loans: boolean
+  /** Presupuestos que superan el 80 % / 100 % */
+  budgets: boolean
+  /** Días de anticipación para cobros (0 = el mismo día) */
+  daysBefore: number
+}
+
 export interface Settings {
   userName: string
   currency: string
@@ -127,6 +145,9 @@ export interface Settings {
   pinHash?: string
   defaultAccountId?: ID
   onboarded: boolean
+  reminders?: ReminderSettings
+  /** RUT de comercio → nombre que el usuario le dio (aprendido al escanear boletas) */
+  merchantNames?: Record<string, string>
 }
 
 export interface FinanceData {

@@ -4,6 +4,11 @@ import { TransactionForm } from './TransactionForm'
 import { LoanDetail, LoanForm, LoanPaymentForm } from './LoanForms'
 import { SubscriptionForm } from './SubscriptionForm'
 import { AccountForm, BudgetForm, CategoryForm, ContributionForm, GoalForm } from './OtherForms'
+import { ScanReceiptSheet } from '../../features/receipts/ScanReceiptSheet'
+import { ReceiptViewer } from '../../features/receipts/ReceiptViewer'
+import { ImportSheet } from '../../features/import/ImportSheet'
+import { QuickAddSheet } from '../../features/quick/QuickAddSheet'
+import { SplitSheet } from '../../features/split/SplitSheet'
 
 /** Renderiza la hoja activa y la mantiene montada durante la animación de cierre */
 export const SheetHost = () => {
@@ -36,5 +41,15 @@ export const SheetHost = () => {
       return <CategoryForm key={key} {...props} state={s} />
     case 'budget':
       return <BudgetForm key={key} {...props} state={s} />
+    case 'scan':
+      return <ScanReceiptSheet key={key} {...props} file={s.file} />
+    case 'receipt':
+      return <ReceiptViewer key={key} {...props} id={s.id} />
+    case 'import':
+      return <ImportSheet key={key} {...props} />
+    case 'quick':
+      return <QuickAddSheet key={key} {...props} text={s.text} voice={s.voice} />
+    case 'split':
+      return <SplitSheet key={key} {...props} />
   }
 }

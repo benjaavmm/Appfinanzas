@@ -1,9 +1,11 @@
 import { motion, MotionConfig } from 'motion/react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router'
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { useApplyTheme, useHydrated } from './lib/hooks'
 import { useStore } from './lib/store'
-import { toast } from './lib/ui'
+import { openSheet, toast } from './lib/ui'
+import { pruneReceipts, takeSharedFile } from './lib/files'
+import { checkRemindersNow } from './features/reminders/notify'
 import { AppShell } from './components/layout/AppShell'
 import { SheetHost } from './components/forms/SheetHost'
 import { ConfirmDialog, Toaster } from './components/ui/Overlays'
@@ -61,6 +63,41 @@ const AppRoutes = () => {
   )
 }
 
+/**
+ * Acciones al abrir la app desde un acceso directo (mantener presionado el ícono),
+ * desde "Compartir → Mis Finanzas" o desde una notificación: `#/?accion=boleta`, etc.
+ */
+const LaunchActions = () => {
+  const { pathname, search } = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => {
+    const accion = new URLSearchParams(search).get('accion')
+    if (!accion) return
+    navigate({ pathname, search: '' }, { replace: true })
+    switch (accion) {
+      case 'gasto':
+        openSheet({ kind: 'tx', type: 'expense' })
+        break
+      case 'boleta':
+        openSheet({ kind: 'scan' })
+        break
+      case 'boleta-compartida':
+        void takeSharedFile().then((file) => openSheet({ kind: 'scan', file }))
+        break
+      case 'rapido':
+        openSheet({ kind: 'quick' })
+        break
+      case 'dividir':
+        openSheet({ kind: 'split' })
+        break
+      case 'importar':
+        openSheet({ kind: 'import' })
+        break
+    }
+  }, [search, pathname, navigate])
+  return null
+}
+
 const Splash = () => (
   <div className="flex min-h-dvh items-center justify-center bg-bg">
     <motion.img
@@ -89,16 +126,26 @@ export default function App() {
       if (n) toast({ message: `🔁 Se registraron ${n} ${n === 1 ? 'cobro' : 'cobros'} de suscripciones`, tone: 'info' })
     }
     run()
+    void checkRemindersNow()
+    // Fotos de boletas que ya no pertenecen a ningún movimiento (se espera por si hay un "Deshacer")
+    const prune = window.setTimeout(() => {
+      const inUse = new Set(useStore.getState().transactions.flatMap((t) => (t.receiptId ? [t.receiptId] : [])))
+      void pruneReceipts(inUse).catch(() => undefined)
+    }, 15_000)
     const onVis = () => {
       if (document.visibilityState === 'hidden') hiddenAt.current = Date.now()
       else {
         run()
+        void checkRemindersNow()
         if (hiddenAt.current && Date.now() - hiddenAt.current > LOCK_AFTER_MS) setUnlocked(false)
         hiddenAt.current = null
       }
     }
     document.addEventListener('visibilitychange', onVis)
-    return () => document.removeEventListener('visibilitychange', onVis)
+    return () => {
+      window.clearTimeout(prune)
+      document.removeEventListener('visibilitychange', onVis)
+    }
   }, [hydrated])
 
   let content
@@ -112,6 +159,7 @@ export default function App() {
           <AppRoutes />
         </AppShell>
         <SheetHost />
+        <LaunchActions />
       </HashRouter>
     )
 
