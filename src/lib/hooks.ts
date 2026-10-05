@@ -71,10 +71,23 @@ export const useMediaQuery = (query: string) => {
 }
 
 /** Aplica el tema (claro/oscuro/sistema) a <html> */
+/** Tema forzado por quien aloja la página (atributo data-theme en <html>), si existe */
+const useHostTheme = () => {
+  const read = () => document.documentElement.getAttribute('data-theme')
+  const [host, setHost] = useState(read)
+  useEffect(() => {
+    const obs = new MutationObserver(() => setHost(read()))
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => obs.disconnect()
+  }, [])
+  return host === 'dark' || host === 'light' ? host : null
+}
+
 export const useApplyTheme = () => {
   const theme = useStore((s) => s.settings.theme)
   const systemDark = useMediaQuery('(prefers-color-scheme: dark)')
-  const dark = theme === 'dark' || (theme === 'system' && systemDark)
+  const host = useHostTheme()
+  const dark = theme === 'dark' || (theme === 'system' && (host ? host === 'dark' : systemDark))
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
     try {
