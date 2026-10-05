@@ -109,5 +109,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Copias de trabajo temporales de agentes (git worktrees) dentro del repo
+    exclude: ['**/node_modules/**', '**/dist/**', '.claude/**'],
   },
 })
