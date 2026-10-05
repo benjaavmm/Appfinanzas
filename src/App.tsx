@@ -24,13 +24,25 @@ import LockScreen from './pages/LockScreen'
 const LOCK_AFTER_MS = 60_000
 
 /**
- * Las pantallas cambian al instante, sin animación de página: en algunos Android
- * (p. ej. Xiaomi) Chrome no repintaba el contenido tras animar la opacidad de toda la
- * pantalla y quedaba en negro hasta hacer scroll.
+ * Las pantallas cambian al instante, sin animación de página. En algunos Android
+ * (reportado en un Redmi Note 14 Pro+) Chrome no repintaba la pantalla nueva y quedaba
+ * en negro hasta que el usuario hacía scroll; por eso, tras cada cambio de pantalla se
+ * fuerza un cuadro nuevo con un desplazamiento de 1px ida y vuelta.
  */
 const AppRoutes = () => {
   const { pathname } = useLocation()
-  useLayoutEffect(() => window.scrollTo(0, 0), [pathname])
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0)
+    let second = 0
+    const first = requestAnimationFrame(() => {
+      window.scrollTo(0, 1)
+      second = requestAnimationFrame(() => window.scrollTo(0, 0))
+    })
+    return () => {
+      cancelAnimationFrame(first)
+      cancelAnimationFrame(second)
+    }
+  }, [pathname])
   return (
     <Routes>
       <Route path="/" element={<Dashboard />} />

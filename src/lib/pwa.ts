@@ -34,4 +34,21 @@ export const promptInstall = async () => {
   return outcome === 'accepted'
 }
 
+/**
+ * Descarta la versión guardada de la app (service worker y caché) y recarga desde
+ * internet. Los datos del usuario están en IndexedDB y no se tocan.
+ */
+export const forceUpdate = async () => {
+  try {
+    const regs = (await navigator.serviceWorker?.getRegistrations?.()) ?? []
+    await Promise.all(regs.map((r) => r.unregister()))
+    if ('caches' in window) {
+      const keys = await caches.keys()
+      await Promise.all(keys.map((k) => caches.delete(k)))
+    }
+  } finally {
+    window.location.reload()
+  }
+}
+
 export const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent)

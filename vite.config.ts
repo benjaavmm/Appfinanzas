@@ -8,8 +8,14 @@ import { VitePWA } from 'vite-plugin-pwa'
 // En local se sirve desde la raíz.
 const base = process.env.BASE_PATH ?? '/'
 
+// Identifica la versión publicada (se muestra en Ajustes)
+const build = { sha: (process.env.GITHUB_SHA ?? 'local').slice(0, 7), time: new Date().toISOString() }
+
 export default defineConfig({
   base,
+  define: {
+    __APP_BUILD__: JSON.stringify(build),
+  },
   plugins: [
     react(),
     tailwindcss(),

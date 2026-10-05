@@ -3,8 +3,9 @@ import { Download, FileSpreadsheet, Lock, Monitor, Moon, RotateCcw, Smartphone, 
 import { exportCSV, exportJSON, hashPin, parseBackup } from '../lib/backup'
 import { buildDemoData } from '../lib/demo'
 import { CURRENCIES } from '../lib/format'
+import { fmtDate, toDateStr } from '../lib/dates'
 import { useData } from '../lib/hooks'
-import { isIOS, promptInstall, usePwa } from '../lib/pwa'
+import { forceUpdate, isIOS, promptInstall, usePwa } from '../lib/pwa'
 import { useStore } from '../lib/store'
 import { ask, toast } from '../lib/ui'
 import type { ThemePref } from '../lib/types'
@@ -276,10 +277,25 @@ export default function Settings() {
               Borrar todos los datos
             </Button>
           </div>
-          <p className="mt-4 flex items-center gap-1.5 text-[11px] text-muted">
-            <RotateCcw className="size-3" /> Mis Finanzas v1.0 · funciona sin conexión · {data.transactions.length} movimientos
-            guardados
-          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+            <p className="text-[11px] text-muted">
+              Versión {__APP_BUILD__.sha} · publicada el {fmtDate(toDateStr(new Date(__APP_BUILD__.time)), "d 'de' MMM")} a las{' '}
+              {new Date(__APP_BUILD__.time).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
+              <br />
+              {data.transactions.length} movimientos guardados en este dispositivo
+            </p>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<RotateCcw className="size-4" />}
+              onClick={() => {
+                toast({ message: 'Buscando la última versión…', tone: 'info' })
+                void forceUpdate()
+              }}
+            >
+              Actualizar app
+            </Button>
+          </div>
         </Card>
       </div>
 

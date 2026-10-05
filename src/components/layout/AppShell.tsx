@@ -83,13 +83,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             >
               {({ isActive }) => (
                 <>
-                  {isActive && (
-                    <motion.span
-                      layoutId="side-active"
-                      className="absolute inset-0 rounded-2xl bg-brand-soft"
-                      transition={{ type: 'spring', stiffness: 500, damping: 40 }}
-                    />
-                  )}
+                  {isActive && <span className="absolute inset-0 rounded-2xl bg-brand-soft" />}
                   <Icon className="relative size-5" />
                   <span className="relative">{label}</span>
                 </>
@@ -141,13 +135,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                     active ? 'text-brand' : 'text-muted',
                   )}
                 >
-                  {active && (
-                    <motion.span
-                      layoutId="tab-active"
-                      className="absolute inset-0 rounded-full bg-brand-soft"
-                      transition={{ type: 'spring', stiffness: 500, damping: 38 }}
-                    />
-                  )}
+                  {active && <span className="absolute inset-0 rounded-full bg-brand-soft" />}
                   <Icon className="relative size-[22px]" strokeWidth={active ? 2.4 : 2} />
                 </span>
                 <span className={cx('text-[11px] font-semibold', active ? 'text-ink' : 'text-muted')}>{item.label}</span>
