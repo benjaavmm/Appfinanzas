@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useMemo, useState } from 'react'
-import { ArrowDown, Sparkles, Trash } from 'lucide-react'
+import { ArrowDown, Camera, Sparkles, Trash } from 'lucide-react'
 import { addDaysStr, todayStr } from '../../lib/dates'
 import { COLORS } from '../../lib/defaults'
 import { byCategory, inMonth } from '../../lib/finance'
@@ -14,6 +14,7 @@ import type { Transaction, TxType } from '../../lib/types'
 import { Button, Chip, cx, Field, Input, Segmented, Textarea } from '../ui'
 import { AccountChips, AmountInput, CategoryGrid, EmojiPicker } from '../ui/pickers'
 import { Sheet } from '../ui/Sheet'
+import { ReceiptAttachment } from '../../features/receipts/ReceiptAttachment'
 
 type Props = { open: boolean; onClose: () => void; state: Extract<SheetState, { kind: 'tx' }> }
 
@@ -42,6 +43,8 @@ export const TransactionForm = ({ open, onClose, state }: Props) => {
   const [creatingCat, setCreatingCat] = useState(false)
   const [newCatName, setNewCatName] = useState('')
   const [newCatIcon, setNewCatIcon] = useState('🏷️')
+  // Foto de la boleta: la del movimiento, la que viene del escaneo, o la que se adjunte aquí
+  const [receiptId, setReceiptId] = useState<string | undefined>(existing?.receiptId ?? state.initial?.receiptId)
 
   const cats = store.categories.filter((c) => c.kind === (type === 'income' ? 'income' : 'expense'))
   const picks = useMemo(
@@ -91,6 +94,7 @@ export const TransactionForm = ({ open, onClose, state }: Props) => {
       place: place.trim() || undefined,
       note: note.trim() || undefined,
       subscriptionId: existing?.subscriptionId,
+      receiptId,
     }
     vibrate(12)
     if (existing) {
@@ -133,6 +137,20 @@ export const TransactionForm = ({ open, onClose, state }: Props) => {
 
   const noAccounts = store.accounts.filter((a) => !a.archived).length === 0
 
+  const scanInstead = async () => {
+    // Escanear abre otra hoja: si ya escribiste algo, se confirma antes de descartarlo
+    const typed = !!(amount || place.trim() || note.trim())
+    if (typed) {
+      const ok = await ask({
+        title: '¿Escanear una boleta?',
+        message: 'Se descartará lo que escribiste en este gasto.',
+        confirmLabel: 'Escanear',
+      })
+      if (!ok) return
+    }
+    openSheet({ kind: 'scan' })
+  }
+
   return (
     <Sheet
       open={open}
@@ -171,6 +189,16 @@ export const TransactionForm = ({ open, onClose, state }: Props) => {
               { value: 'transfer', label: 'Transferir' },
             ]}
           />
+
+          {!existing && type === 'expense' && !receiptId && (
+            <button
+              type="button"
+              onClick={() => void scanInstead()}
+              className="mx-auto -mt-2 mb-3 flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-brand transition hover:bg-brand-soft active:scale-95"
+            >
+              <Camera className="size-4" /> Escanear boleta
+            </button>
+          )}
 
           <AmountInput
             value={amount}
@@ -366,6 +394,8 @@ export const TransactionForm = ({ open, onClose, state }: Props) => {
           <Field label="Nota (opcional)">
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Algo que quieras recordar…" rows={2} />
           </Field>
+
+          <ReceiptAttachment receiptId={receiptId} onChange={setReceiptId} canAttach={type === 'expense'} />
 
           {existing?.subscriptionId && (
             <p className={cx('rounded-2xl bg-info-soft px-4 py-3 text-xs font-medium text-info')}>

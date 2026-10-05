@@ -1,4 +1,4 @@
-import { ArrowLeftRight } from 'lucide-react'
+import { ArrowLeftRight, ReceiptText } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { useMoney } from '../lib/hooks'
 import { openSheet } from '../lib/ui'
@@ -38,7 +38,14 @@ export const TxItem = ({ tx, showDate }: { tx: Transaction; showDate?: boolean }
         </span>
       )}
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-semibold">{title}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate font-semibold">{title}</span>
+          {tx.receiptId && (
+            <ReceiptText className="size-3.5 shrink-0 text-muted" role="img" aria-label="Con foto de boleta">
+              <title>Con foto de boleta</title>
+            </ReceiptText>
+          )}
+        </span>
         <span className="block truncate text-xs text-muted">
           {subtitle}
           {tx.note ? ` · ${tx.note}` : ''}
