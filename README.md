@@ -58,17 +58,3 @@ Para probar todo sin escribir datos, en la pantalla de bienvenida toca **"Explor
 - **Zustand** para el estado, guardado en **IndexedDB** (con respaldo en localStorage).
 - **vite-plugin-pwa** para que se instale y funcione sin conexión.
 
-```
-src/
-  lib/            lógica (sin interfaz) — probada con Vitest
-    types.ts        modelo de datos
-    store.ts        estado + acciones (guardar, borrar, pagar suscripción…)
-    finance.ts      saldos, préstamos, agrupaciones
-    insights.ts     el "asistente": comparaciones, proyección, alertas, aprendizaje
-    recurring.ts    fechas de cobro de suscripciones
-    backup.ts       respaldo JSON / exportar CSV
-    demo.ts         datos de ejemplo
-  components/     piezas de interfaz, formularios y gráficos
-  pages/          pantallas (Inicio, Movimientos, Análisis, Préstamos…)
-```
-
