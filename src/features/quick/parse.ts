@@ -716,7 +716,9 @@ export const parseQuickText = (text: string, ctx: QuickContext): QuickParse => {
       result.place = cap(placeText)
       const s = suggestCategory(placeText, kind, { transactions: ctx.transactions, categories: ctx.categories })
       categoryId = validCategory(ctx, s.categoryId, kind)
-      if (s.place && placeKey(s.place) === placeKey(placeText)) {
+      // Solo un nombre ya usado en tu historial cuenta como lugar conocido; el diccionario
+      // pone mayúscula a cada palabra y convertiría "almuerzo con amigos" en un local
+      if (s.source === 'historial' && s.place && placeKey(s.place) === placeKey(placeText)) {
         result.place = s.place
         result.venue = true
       }
