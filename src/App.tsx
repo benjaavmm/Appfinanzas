@@ -1,5 +1,5 @@
-import { AnimatePresence, motion, MotionConfig } from 'motion/react'
-import { useEffect, useRef, useState } from 'react'
+import { motion, MotionConfig } from 'motion/react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router'
 import { useApplyTheme, useHydrated } from './lib/hooks'
 import { useStore } from './lib/store'
@@ -23,34 +23,29 @@ import LockScreen from './pages/LockScreen'
 
 const LOCK_AFTER_MS = 60_000
 
-const AnimatedRoutes = () => {
-  const location = useLocation()
-  useEffect(() => window.scrollTo({ top: 0 }), [location.pathname])
+/**
+ * Las pantallas cambian al instante, sin animación de página: en algunos Android
+ * (p. ej. Xiaomi) Chrome no repintaba el contenido tras animar la opacidad de toda la
+ * pantalla y quedaba en negro hasta hacer scroll.
+ */
+const AppRoutes = () => {
+  const { pathname } = useLocation()
+  useLayoutEffect(() => window.scrollTo(0, 0), [pathname])
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={location.pathname}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -4 }}
-        transition={{ duration: 0.18, ease: 'easeOut' }}
-      >
-        <Routes location={location}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/movimientos" element={<Transactions />} />
-          <Route path="/analisis" element={<Insights />} />
-          <Route path="/prestamos" element={<Loans />} />
-          <Route path="/suscripciones" element={<Subscriptions />} />
-          <Route path="/presupuestos" element={<Budgets />} />
-          <Route path="/metas" element={<Goals />} />
-          <Route path="/cuentas" element={<Accounts />} />
-          <Route path="/categorias" element={<Categories />} />
-          <Route path="/ajustes" element={<Settings />} />
-          <Route path="/mas" element={<More />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </motion.div>
-    </AnimatePresence>
+    <Routes>
+      <Route path="/" element={<Dashboard />} />
+      <Route path="/movimientos" element={<Transactions />} />
+      <Route path="/analisis" element={<Insights />} />
+      <Route path="/prestamos" element={<Loans />} />
+      <Route path="/suscripciones" element={<Subscriptions />} />
+      <Route path="/presupuestos" element={<Budgets />} />
+      <Route path="/metas" element={<Goals />} />
+      <Route path="/cuentas" element={<Accounts />} />
+      <Route path="/categorias" element={<Categories />} />
+      <Route path="/ajustes" element={<Settings />} />
+      <Route path="/mas" element={<More />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }
 
@@ -102,7 +97,7 @@ export default function App() {
     content = (
       <HashRouter>
         <AppShell>
-          <AnimatedRoutes />
+          <AppRoutes />
         </AppShell>
         <SheetHost />
       </HashRouter>

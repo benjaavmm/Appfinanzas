@@ -1,4 +1,3 @@
-import { motion } from 'motion/react'
 import { Pencil, Plus } from 'lucide-react'
 import { fmtDate, fmtInDays } from '../lib/dates'
 import { goalMonthlyNeeded, goalSaved, goalsSavedTotal } from '../lib/finance'
@@ -33,18 +32,13 @@ export default function Goals() {
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {goals.map((g, i) => {
+          {goals.map((g) => {
             const saved = goalSaved(g)
             const ratio = saved / g.target
             const done = ratio >= 1
             const need = goalMonthlyNeeded(g, today)
             return (
-              <motion.div
-                key={g.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-              >
+              <div key={g.id}>
                 <Card className="relative overflow-hidden">
                   {done && (
                     <div
@@ -97,7 +91,7 @@ export default function Goals() {
                     </p>
                   )}
                 </Card>
-              </motion.div>
+              </div>
             )
           })}
         </div>

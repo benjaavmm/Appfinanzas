@@ -147,8 +147,8 @@ export const EmptyState = ({
 }) => (
   <div className="flex flex-col items-center px-6 py-10 text-center">
     <motion.div
-      initial={{ scale: 0.6, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
+      initial={{ scale: 0.6 }}
+      animate={{ scale: 1 }}
       transition={{ type: 'spring', stiffness: 260, damping: 18 }}
       className="mb-3 flex size-20 items-center justify-center rounded-full bg-surface-2 text-4xl"
     >
@@ -491,7 +491,7 @@ export const PageHeader = ({
   /** Controles que quedan fijos junto al título (p. ej. selector de mes) */
   children?: ReactNode
 }) => (
-  <header className="pt-safe sticky top-0 z-20 -mx-4 mb-2 bg-bg/95 px-4 backdrop-blur-xl sm:-mx-6 sm:px-6">
+  <header className="pt-safe sticky top-0 z-20 -mx-4 mb-2 bg-bg px-4 sm:-mx-6 sm:px-6">
     <div className="flex min-h-16 items-center gap-2 py-2">
       {back}
       <div className="min-w-0 flex-1">

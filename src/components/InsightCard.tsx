@@ -1,4 +1,3 @@
-import { motion } from 'motion/react'
 import { ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import type { Insight, Tone } from '../lib/insights'
@@ -11,15 +10,12 @@ const TONE: Record<Tone, { bg: string; label: string; dot: string }> = {
   info: { bg: 'bg-info-soft', label: 'Dato', dot: 'bg-info' },
 }
 
-export const InsightCard = ({ insight, index = 0, compact }: { insight: Insight; index?: number; compact?: boolean }) => {
+export const InsightCard = ({ insight, compact }: { insight: Insight; compact?: boolean }) => {
   const nav = useNavigate()
   const t = TONE[insight.tone]
   return (
-    <motion.button
+    <button
       type="button"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
       onClick={() => insight.to && nav(insight.to)}
       className={cx(
         'flex w-full items-start gap-3 rounded-3xl border border-line bg-surface p-4 text-left shadow-card transition',
@@ -37,6 +33,6 @@ export const InsightCard = ({ insight, index = 0, compact }: { insight: Insight;
         <span className="mt-1 block text-sm leading-snug text-ink-2">{insight.body}</span>
       </span>
       {insight.to && <ChevronRight className="mt-1 size-5 shrink-0 text-muted" />}
-    </motion.button>
+    </button>
   )
 }

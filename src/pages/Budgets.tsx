@@ -1,4 +1,3 @@
-import { motion } from 'motion/react'
 import { useMemo } from 'react'
 import { daysInMonth, fmtMonth, monthKey, parseDate } from '../lib/dates'
 import { byCategory, inMonth, sumType } from '../lib/finance'
@@ -87,16 +86,13 @@ export default function Budgets() {
           }
         />
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {withBudget.map((c, i) => {
+          {withBudget.map((c) => {
             const s = spentBy.get(c.id) ?? 0
             const r = s / c.budget!
             const left = c.budget! - s
             return (
-              <motion.button
+              <button
                 key={c.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04 }}
                 onClick={() => openSheet({ kind: 'budget', id: c.id })}
                 className="rounded-3xl border border-line bg-surface p-4 text-left shadow-card transition active:scale-[0.99]"
               >
@@ -121,7 +117,7 @@ export default function Budgets() {
                       ? `⚠️ Vas más rápido que el mes (${Math.round(r * 100)}% gastado, ${Math.round(progress * 100)}% del mes)`
                       : `✅ ${fmt(left / daysLeft)} por día hasta fin de mes`}
                 </p>
-              </motion.button>
+              </button>
             )
           })}
         </div>

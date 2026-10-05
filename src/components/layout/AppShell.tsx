@@ -105,7 +105,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
       </main>
 
       {/* Barra inferior (móvil) */}
-      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/85 backdrop-blur-xl lg:hidden">
+      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface lg:hidden">
         <div className="mx-auto flex h-16 max-w-lg items-stretch px-2">
           {MOBILE.map((item) => {
             if (!item)

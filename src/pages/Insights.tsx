@@ -98,12 +98,7 @@ export default function Insights() {
             </button>
             <AnimatePresence>
               {showHealth && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
-                >
+                <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
                   <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {health.parts.map((p) => (
                       <li key={p.label} className="rounded-2xl bg-surface-2 p-3">
@@ -150,8 +145,8 @@ export default function Insights() {
           <section className="lg:col-span-2">
             <SectionHeader title="Consejos y alertas" subtitle="Basado en tu historial" />
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              {insights.map((i, idx) => (
-                <InsightCard key={i.id} insight={i} index={idx} />
+              {insights.map((i) => (
+                <InsightCard key={i.id} insight={i} />
               ))}
             </div>
           </section>
@@ -201,31 +196,23 @@ export default function Insights() {
         <Card>
           <SectionHeader title="Calendario de gastos" subtitle="Más oscuro = más gasto · toca un día" />
           <CalendarHeatmap month={month} totals={daily} selected={day} onSelect={setDay} today={today} />
-          <AnimatePresence mode="wait">
-            {day && (
-              <motion.div
-                key={day}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="mt-4 border-t border-line pt-3"
-              >
-                <div className="mb-1 flex justify-between text-sm">
-                  <span className="font-bold">{fmtRelativeDay(day)}</span>
-                  <span className="font-semibold text-muted">{fmt(-(daily.get(day)?.expense ?? 0))}</span>
+          {day && (
+            <div key={day} className="mt-4 border-t border-line pt-3">
+              <div className="mb-1 flex justify-between text-sm">
+                <span className="font-bold">{fmtRelativeDay(day)}</span>
+                <span className="font-semibold text-muted">{fmt(-(daily.get(day)?.expense ?? 0))}</span>
+              </div>
+              {dayTx.length ? (
+                <div className="-mx-2">
+                  {dayTx.map((t) => (
+                    <TxItem key={t.id} tx={t} />
+                  ))}
                 </div>
-                {dayTx.length ? (
-                  <div className="-mx-2">
-                    {dayTx.map((t) => (
-                      <TxItem key={t.id} tx={t} />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="py-2 text-sm text-muted">Día sin movimientos. 🎉</p>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+              ) : (
+                <p className="py-2 text-sm text-muted">Día sin movimientos. 🎉</p>
+              )}
+            </div>
+          )}
         </Card>
 
         <Card>

@@ -1,4 +1,3 @@
-import { motion } from 'motion/react'
 import { hashPin } from '../lib/backup'
 import { useStore } from '../lib/store'
 import { ask } from '../lib/ui'
@@ -9,11 +8,7 @@ export default function LockScreen({ onUnlock }: { onUnlock: () => void }) {
   const name = useStore((s) => s.settings.userName)
   const resetAll = useStore((s) => s.resetAll)
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="pt-safe pb-safe flex min-h-dvh flex-col items-center justify-center bg-bg px-6"
-    >
+    <div className="pt-safe pb-safe flex min-h-dvh flex-col items-center justify-center bg-bg px-6">
       <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="mb-6 size-16 rounded-[22px]" />
       <PinPad
         title={name ? `Hola, ${name}` : 'Mis Finanzas'}
@@ -41,6 +36,6 @@ export default function LockScreen({ onUnlock }: { onUnlock: () => void }) {
       >
         ¿Olvidaste tu PIN?
       </button>
-    </motion.div>
+    </div>
   )
 }

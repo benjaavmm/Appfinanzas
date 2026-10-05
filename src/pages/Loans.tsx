@@ -1,4 +1,3 @@
-import { motion } from 'motion/react'
 import { useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { fmtDate, fmtInDays } from '../lib/dates'
@@ -80,7 +79,7 @@ export default function Loans() {
       />
 
       <div className="grid grid-cols-2 gap-3">
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl bg-good-soft p-4">
+        <div className="rounded-3xl bg-good-soft p-4">
           <p className="text-xs font-bold text-good">🤝 TE DEBEN</p>
           <p className="mt-1 truncate text-2xl font-extrabold text-good">{fmt(owedToMe)}</p>
           <button
@@ -89,13 +88,8 @@ export default function Loans() {
           >
             + Le presté a alguien
           </button>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="rounded-3xl bg-bad-soft p-4"
-        >
+        </div>
+        <div className="rounded-3xl bg-bad-soft p-4">
           <p className="text-xs font-bold text-bad">🙏 DEBES</p>
           <p className="mt-1 truncate text-2xl font-extrabold text-bad">{fmt(iOwe)}</p>
           <button
@@ -104,7 +98,7 @@ export default function Loans() {
           >
             + Alguien me prestó
           </button>
-        </motion.div>
+        </div>
       </div>
 
       {loans.length === 0 ? (
@@ -128,16 +122,11 @@ export default function Loans() {
 
           {view === 'people' ? (
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              {activePeople.map((p, i) => {
+              {activePeople.map((p) => {
                 const total = p.loans.reduce((s, l) => s + l.amount, 0)
                 const pending = p.owedToMe + p.iOwe
                 return (
-                  <motion.div
-                    key={p.key}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.04 }}
-                  >
+                  <div key={p.key}>
                     <Card>
                       <div className="flex items-center gap-3">
                         <Avatar name={p.name} />
@@ -185,7 +174,7 @@ export default function Loans() {
                         </Button>
                       </div>
                     </Card>
-                  </motion.div>
+                  </div>
                 )
               })}
               {settledPeople.length > 0 && (

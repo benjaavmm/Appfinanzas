@@ -1,4 +1,3 @@
-import { motion } from 'motion/react'
 import { Link } from 'react-router'
 import { ChevronRight } from 'lucide-react'
 import { debtTotals, goalsSavedTotal } from '../lib/finance'
@@ -35,13 +34,7 @@ export default function More() {
       <PageHeader title="Más" />
       <div className="grid grid-cols-2 gap-3">
         {items.map(({ to, label, icon: Icon }, i) => (
-          <motion.div
-            key={to}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.04 }}
-            className={i === items.length - 1 ? 'col-span-2' : ''}
-          >
+          <div key={to} className={i === items.length - 1 ? 'col-span-2' : ''}>
             <Link
               to={to}
               className="flex h-full flex-col rounded-3xl border border-line bg-surface p-4 shadow-card transition active:scale-[0.97]"
@@ -57,7 +50,7 @@ export default function More() {
               </span>
               <span className="text-xs text-muted">{details[to]}</span>
             </Link>
-          </motion.div>
+          </div>
         ))}
       </div>
     </div>

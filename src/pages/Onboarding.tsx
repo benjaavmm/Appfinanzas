@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'motion/react'
+import { motion } from 'motion/react'
 import { useState } from 'react'
 import { ArrowLeft, Check, Plus } from 'lucide-react'
 import { buildDemoData } from '../lib/demo'
@@ -91,195 +91,169 @@ export default function Onboarding() {
           </div>
         )}
 
-        <AnimatePresence mode="wait">
-          {step === 0 && (
-            <motion.div
-              key="s0"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="flex flex-1 flex-col"
-            >
-              <motion.img
-                src={`${import.meta.env.BASE_URL}favicon.svg`}
-                alt=""
-                className="size-20 rounded-[26px] shadow-[0_20px_40px_-12px_rgba(102,85,245,0.7)]"
-                initial={{ scale: 0.5, rotate: -12 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: 'spring', stiffness: 220, damping: 14 }}
-              />
-              <h1 className="mt-6 text-4xl leading-tight font-extrabold tracking-tight">
-                Tu dinero,
-                <br />
-                <span className="bg-gradient-to-r from-[#6655f5] to-[#c2508f] bg-clip-text text-transparent">
-                  en orden y a la vista.
-                </span>
-              </h1>
-              <ul className="mt-8 space-y-4">
-                {FEATURES.map(([e, t, d], i) => (
-                  <motion.li
-                    key={t}
-                    className="flex gap-3"
-                    initial={{ opacity: 0, x: -12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.15 + i * 0.08 }}
-                  >
-                    <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-surface text-xl shadow-card">
-                      {e}
-                    </span>
-                    <span>
-                      <span className="block font-bold">{t}</span>
-                      <span className="block text-sm text-ink-2">{d}</span>
-                    </span>
-                  </motion.li>
-                ))}
-              </ul>
-              <div className="mt-auto space-y-2 pt-8">
-                <Button block size="lg" onClick={() => setStep(1)}>
-                  Empezar
-                </Button>
-                <Button block variant="ghost" onClick={demo}>
-                  Explorar con datos de ejemplo
-                </Button>
-                <p className="pt-2 text-center text-[11px] text-muted">🔒 Tus datos se guardan solo en este dispositivo.</p>
-              </div>
-            </motion.div>
-          )}
+        {step === 0 && (
+          <div key="s0" className="flex flex-1 flex-col">
+            <motion.img
+              src={`${import.meta.env.BASE_URL}favicon.svg`}
+              alt=""
+              className="size-20 rounded-[26px] shadow-[0_20px_40px_-12px_rgba(102,85,245,0.7)]"
+              initial={{ scale: 0.5, rotate: -12 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: 'spring', stiffness: 220, damping: 14 }}
+            />
+            <h1 className="mt-6 text-4xl leading-tight font-extrabold tracking-tight">
+              Tu dinero,
+              <br />
+              <span className="bg-gradient-to-r from-[#6655f5] to-[#c2508f] bg-clip-text text-transparent">
+                en orden y a la vista.
+              </span>
+            </h1>
+            <ul className="mt-8 space-y-4">
+              {FEATURES.map(([e, t, d]) => (
+                <li key={t} className="flex gap-3">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-surface text-xl shadow-card">
+                    {e}
+                  </span>
+                  <span>
+                    <span className="block font-bold">{t}</span>
+                    <span className="block text-sm text-ink-2">{d}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-auto space-y-2 pt-8">
+              <Button block size="lg" onClick={() => setStep(1)}>
+                Empezar
+              </Button>
+              <Button block variant="ghost" onClick={demo}>
+                Explorar con datos de ejemplo
+              </Button>
+              <p className="pt-2 text-center text-[11px] text-muted">🔒 Tus datos se guardan solo en este dispositivo.</p>
+            </div>
+          </div>
+        )}
 
-          {step === 1 && (
-            <motion.div
-              key="s1"
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              className="flex flex-1 flex-col"
-            >
-              <h2 className="text-3xl font-extrabold tracking-tight">¡Hola! 👋</h2>
-              <p className="mt-1 text-ink-2">Partamos por lo básico.</p>
-              <div className="mt-8 space-y-5">
-                <Field label="¿Cómo te llamas?">
-                  <Input
-                    autoFocus
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Tu nombre"
-                    onKeyDown={(e) => e.key === 'Enter' && setStep(2)}
-                  />
-                </Field>
-                <Field label="Tu moneda">
-                  <Select value={currency} onChange={(e) => setCurrency(e.target.value)}>
-                    {CURRENCIES.map((c) => (
-                      <option key={c.code} value={c.code}>
-                        {c.code} · {c.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-              </div>
-              <div className="mt-auto pt-8">
-                <Button block size="lg" onClick={() => setStep(2)}>
-                  Continuar
-                </Button>
-              </div>
-            </motion.div>
-          )}
+        {step === 1 && (
+          <div key="s1" className="flex flex-1 flex-col">
+            <h2 className="text-3xl font-extrabold tracking-tight">¡Hola! 👋</h2>
+            <p className="mt-1 text-ink-2">Partamos por lo básico.</p>
+            <div className="mt-8 space-y-5">
+              <Field label="¿Cómo te llamas?">
+                <Input
+                  autoFocus
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Tu nombre"
+                  onKeyDown={(e) => e.key === 'Enter' && setStep(2)}
+                />
+              </Field>
+              <Field label="Tu moneda">
+                <Select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+                  {CURRENCIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.code} · {c.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+            <div className="mt-auto pt-8">
+              <Button block size="lg" onClick={() => setStep(2)}>
+                Continuar
+              </Button>
+            </div>
+          </div>
+        )}
 
-          {step === 2 && (
-            <motion.div
-              key="s2"
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              className="flex flex-1 flex-col"
-            >
-              <h2 className="text-3xl font-extrabold tracking-tight">¿Cuánto dinero tienes hoy?</h2>
-              <p className="mt-1 text-ink-2">
-                Activa tus cuentas y escribe el saldo actual de cada una. Después puedes agregar más.
-              </p>
-              <div className="mt-6 space-y-2">
-                {drafts.map((d) => (
-                  <motion.div
-                    layout
-                    key={d.key}
-                    className={cx(
-                      'rounded-3xl border p-3 transition',
-                      d.on ? 'border-line bg-surface shadow-card' : 'border-dashed border-line opacity-70',
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="flex size-11 shrink-0 items-center justify-center rounded-2xl text-xl"
-                        style={{ background: `color-mix(in srgb, ${d.color} 18%, transparent)` }}
-                      >
-                        {d.icon}
-                      </span>
-                      <input
-                        value={d.name}
-                        onChange={(e) => upd(d.key, { name: e.target.value })}
-                        className="min-w-0 flex-1 bg-transparent font-semibold outline-none"
-                        aria-label="Nombre de la cuenta"
-                      />
-                      <button
-                        aria-label={d.on ? 'Quitar' : 'Agregar'}
-                        onClick={() => upd(d.key, { on: !d.on })}
-                        className={cx(
-                          'flex size-8 items-center justify-center rounded-full transition',
-                          d.on ? 'bg-brand text-brand-ink' : 'bg-surface-2 text-muted',
-                        )}
-                      >
-                        {d.on ? <Check className="size-4" /> : <Plus className="size-4" />}
-                      </button>
-                    </div>
-                    {d.on && (
-                      <div className="mt-2 flex items-center gap-2 rounded-2xl bg-surface-2 px-3">
-                        <span className="text-sm text-muted">{d.type === 'credit' ? 'Deuda' : 'Saldo'}</span>
-                        <input
-                          inputMode={decimals ? 'decimal' : 'numeric'}
-                          value={formatAmountInput(d.amount, cur.locale, decimals)}
-                          onChange={(e) => upd(d.key, { amount: sanitizeAmountInput(e.target.value, cur.locale, decimals) })}
-                          placeholder="0"
-                          className="tabular h-11 min-w-0 flex-1 bg-transparent text-right text-lg font-bold outline-none"
-                          aria-label={`Saldo de ${d.name}`}
-                        />
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-                <button
-                  onClick={() =>
-                    setDrafts((ds) => [
-                      ...ds,
-                      {
-                        key: Date.now(),
-                        name: 'Otra cuenta',
-                        type: 'other',
-                        icon: '👛',
-                        color: COLORS[ds.length % COLORS.length],
-                        amount: '',
-                        on: true,
-                      },
-                    ])
-                  }
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-3xl border border-dashed border-line text-sm font-semibold text-muted"
+        {step === 2 && (
+          <div key="s2" className="flex flex-1 flex-col">
+            <h2 className="text-3xl font-extrabold tracking-tight">¿Cuánto dinero tienes hoy?</h2>
+            <p className="mt-1 text-ink-2">
+              Activa tus cuentas y escribe el saldo actual de cada una. Después puedes agregar más.
+            </p>
+            <div className="mt-6 space-y-2">
+              {drafts.map((d) => (
+                <motion.div
+                  layout
+                  key={d.key}
+                  className={cx(
+                    'rounded-3xl border p-3 transition',
+                    d.on ? 'border-line bg-surface shadow-card' : 'border-dashed border-line opacity-70',
+                  )}
                 >
-                  <Plus className="size-4" /> Agregar otra cuenta
-                </button>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="flex size-11 shrink-0 items-center justify-center rounded-2xl text-xl"
+                      style={{ background: `color-mix(in srgb, ${d.color} 18%, transparent)` }}
+                    >
+                      {d.icon}
+                    </span>
+                    <input
+                      value={d.name}
+                      onChange={(e) => upd(d.key, { name: e.target.value })}
+                      className="min-w-0 flex-1 bg-transparent font-semibold outline-none"
+                      aria-label="Nombre de la cuenta"
+                    />
+                    <button
+                      aria-label={d.on ? 'Quitar' : 'Agregar'}
+                      onClick={() => upd(d.key, { on: !d.on })}
+                      className={cx(
+                        'flex size-8 items-center justify-center rounded-full transition',
+                        d.on ? 'bg-brand text-brand-ink' : 'bg-surface-2 text-muted',
+                      )}
+                    >
+                      {d.on ? <Check className="size-4" /> : <Plus className="size-4" />}
+                    </button>
+                  </div>
+                  {d.on && (
+                    <div className="mt-2 flex items-center gap-2 rounded-2xl bg-surface-2 px-3">
+                      <span className="text-sm text-muted">{d.type === 'credit' ? 'Deuda' : 'Saldo'}</span>
+                      <input
+                        inputMode={decimals ? 'decimal' : 'numeric'}
+                        value={formatAmountInput(d.amount, cur.locale, decimals)}
+                        onChange={(e) => upd(d.key, { amount: sanitizeAmountInput(e.target.value, cur.locale, decimals) })}
+                        placeholder="0"
+                        className="tabular h-11 min-w-0 flex-1 bg-transparent text-right text-lg font-bold outline-none"
+                        aria-label={`Saldo de ${d.name}`}
+                      />
+                    </div>
+                  )}
+                </motion.div>
+              ))}
+              <button
+                onClick={() =>
+                  setDrafts((ds) => [
+                    ...ds,
+                    {
+                      key: Date.now(),
+                      name: 'Otra cuenta',
+                      type: 'other',
+                      icon: '👛',
+                      color: COLORS[ds.length % COLORS.length],
+                      amount: '',
+                      on: true,
+                    },
+                  ])
+                }
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-3xl border border-dashed border-line text-sm font-semibold text-muted"
+              >
+                <Plus className="size-4" /> Agregar otra cuenta
+              </button>
+            </div>
+            <div className="mt-auto pt-6">
+              <div className="mb-3 flex items-center justify-between rounded-2xl bg-brand-soft px-4 py-3">
+                <span className="text-sm font-semibold text-brand">Saldo total</span>
+                <span className="text-xl font-extrabold">{formatMoney(total, currency, cur.locale)}</span>
               </div>
-              <div className="mt-auto pt-6">
-                <div className="mb-3 flex items-center justify-between rounded-2xl bg-brand-soft px-4 py-3">
-                  <span className="text-sm font-semibold text-brand">Saldo total</span>
-                  <span className="text-xl font-extrabold">{formatMoney(total, currency, cur.locale)}</span>
-                </div>
-                <Button block size="lg" onClick={finish} disabled={!drafts.some((d) => d.on && d.name.trim())}>
-                  ¡Listo, empezar!
-                </Button>
-                {drafts.some((d) => d.on && d.type === 'credit') && (
-                  <p className="mt-2 text-center text-[11px] text-muted">La deuda de la tarjeta se resta de tu saldo total.</p>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              <Button block size="lg" onClick={finish} disabled={!drafts.some((d) => d.on && d.name.trim())}>
+                ¡Listo, empezar!
+              </Button>
+              {drafts.some((d) => d.on && d.type === 'credit') && (
+                <p className="mt-2 text-center text-[11px] text-muted">La deuda de la tarjeta se resta de tu saldo total.</p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

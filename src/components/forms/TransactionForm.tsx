@@ -267,9 +267,9 @@ export const TransactionForm = ({ open, onClose, state }: Props) => {
                 <AnimatePresence>
                   {learned && normalizeText(place) && (
                     <motion.p
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
+                      initial={{ height: 0 }}
+                      animate={{ height: 'auto' }}
+                      exit={{ height: 0 }}
                       className="mt-2 flex items-start gap-1.5 text-xs font-medium text-brand"
                     >
                       <Sparkles className="mt-px size-3.5 shrink-0" /> {learned}
@@ -292,9 +292,9 @@ export const TransactionForm = ({ open, onClose, state }: Props) => {
                 <AnimatePresence>
                   {creatingCat && (
                     <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
+                      initial={{ height: 0 }}
+                      animate={{ height: 'auto' }}
+                      exit={{ height: 0 }}
                       className="overflow-hidden"
                     >
                       <div className="mt-3 space-y-2 rounded-2xl bg-surface-2 p-3">

@@ -89,11 +89,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         <div className="space-y-6">
           {/* Saldo principal */}
-          <motion.section
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="hero-gradient relative overflow-hidden rounded-[32px] p-6 text-white shadow-[0_20px_50px_-20px_rgba(91,70,229,0.7)]"
-          >
+          <section className="hero-gradient relative overflow-hidden rounded-[32px] p-6 text-white shadow-[0_20px_50px_-20px_rgba(91,70,229,0.7)]">
             <p className="text-sm font-semibold text-white/75">Saldo total</p>
             <AnimatedMoney
               value={total}
@@ -104,13 +100,13 @@ export default function Dashboard() {
               {reserved > 0 && ` · ${fmt(reserved)} apartados en metas`}
             </p>
             <div className="mt-5 grid grid-cols-2 gap-2">
-              <div className="rounded-2xl bg-white/12 p-3 backdrop-blur">
+              <div className="rounded-2xl bg-white/12 p-3">
                 <p className="flex items-center gap-1 text-xs font-semibold text-white/75">
                   <ArrowDownLeft className="size-3.5" /> Ingresos {fmtMonth(ref, false).toLowerCase()}
                 </p>
                 <p className="mt-0.5 truncate text-lg font-bold">{fmt(income)}</p>
               </div>
-              <div className="rounded-2xl bg-white/12 p-3 backdrop-blur">
+              <div className="rounded-2xl bg-white/12 p-3">
                 <p className="flex items-center gap-1 text-xs font-semibold text-white/75">
                   <ArrowUpRight className="size-3.5" /> Gastos {fmtMonth(ref, false).toLowerCase()}
                 </p>
@@ -120,7 +116,7 @@ export default function Dashboard() {
             {(owedToMe > 0 || iOwe > 0) && (
               <Link
                 to="/prestamos"
-                className="mt-2 flex items-center justify-between rounded-2xl bg-white/12 px-3 py-2.5 text-sm backdrop-blur"
+                className="mt-2 flex items-center justify-between rounded-2xl bg-white/12 px-3 py-2.5 text-sm"
               >
                 <span className="text-white/80">
                   {owedToMe > 0 && (
@@ -138,7 +134,7 @@ export default function Dashboard() {
                 <span className="text-xs font-semibold text-white/70">Ver →</span>
               </Link>
             )}
-          </motion.section>
+          </section>
 
           {/* Acciones rápidas */}
           <div className="grid grid-cols-4 gap-2">
@@ -162,12 +158,9 @@ export default function Dashboard() {
                 cls: 'text-info',
               },
               { label: 'Préstamo', icon: HandCoins, onClick: () => openSheet({ kind: 'loan' }), cls: 'text-brand' },
-            ].map((a, i) => (
+            ].map((a) => (
               <motion.button
                 key={a.label}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05 + i * 0.04 }}
                 whileTap={{ scale: 0.92 }}
                 onClick={() => {
                   vibrate(8)
@@ -187,14 +180,11 @@ export default function Dashboard() {
           <section>
             <SectionHeader title="Mis cuentas" to="/cuentas" action="Administrar" />
             <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
-              {visibleAccounts.map((a, i) => {
+              {visibleAccounts.map((a) => {
                 const b = balances.get(a.id) ?? 0
                 return (
-                  <motion.button
+                  <button
                     key={a.id}
-                    initial={{ opacity: 0, x: 16 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.04 }}
                     onClick={() => nav(`/movimientos?acc=${a.id}`)}
                     className="w-40 shrink-0 snap-start rounded-3xl border border-line bg-surface p-4 text-left shadow-card transition active:scale-[0.97]"
                   >
@@ -206,7 +196,7 @@ export default function Dashboard() {
                     </span>
                     <p className="mt-3 truncate text-sm font-semibold text-ink-2">{a.name}</p>
                     <p className={cx('truncate text-lg font-bold', b < 0 && 'text-bad')}>{fmt(b)}</p>
-                  </motion.button>
+                  </button>
                 )
               })}
               <button
@@ -273,8 +263,8 @@ export default function Dashboard() {
             />
             {insights.length ? (
               <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-1 sm:overflow-visible sm:px-0">
-                {insights.slice(0, 4).map((i, idx) => (
-                  <InsightCard key={i.id} insight={i} index={idx} compact />
+                {insights.slice(0, 4).map((i) => (
+                  <InsightCard key={i.id} insight={i} compact />
                 ))}
               </div>
             ) : (

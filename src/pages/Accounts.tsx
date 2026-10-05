@@ -1,4 +1,3 @@
-import { motion } from 'motion/react'
 import { ArrowLeftRight, Plus } from 'lucide-react'
 import { ACCOUNT_TYPES } from '../lib/defaults'
 import { debtTotals } from '../lib/finance'
@@ -48,11 +47,11 @@ export default function Accounts() {
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {active.map((a, i) => {
+        {active.map((a) => {
           const b = balances.get(a.id) ?? 0
           const type = ACCOUNT_TYPES.find((t) => t.value === a.type)
           return (
-            <motion.div key={a.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+            <div key={a.id}>
               <Card onClick={() => openSheet({ kind: 'account', id: a.id })} className="relative overflow-hidden">
                 <div className="absolute top-0 right-0 h-full w-1.5" style={{ background: a.color }} />
                 <div className="flex items-center gap-3">
@@ -77,7 +76,7 @@ export default function Accounts() {
                   </Button>
                 </div>
               </Card>
-            </motion.div>
+            </div>
           )
         })}
       </div>

@@ -35,11 +35,7 @@ export default function Subscriptions() {
         }
       />
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#0ea5b7] via-[#3987e5] to-[#6366f1] p-5 text-white shadow-[0_18px_40px_-18px_rgba(57,135,229,0.8)]"
-      >
+      <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#0ea5b7] via-[#3987e5] to-[#6366f1] p-5 text-white shadow-[0_18px_40px_-18px_rgba(57,135,229,0.8)]">
         <p className="text-sm font-semibold text-white/80">Pagas al mes</p>
         <p className="text-4xl font-extrabold tracking-tight">{fmt(monthly)}</p>
         <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
@@ -52,7 +48,7 @@ export default function Subscriptions() {
             <p className="font-bold">{active.length}</p>
           </div>
         </div>
-      </motion.div>
+      </div>
 
       {subscriptions.length === 0 ? (
         <EmptyState

@@ -1,4 +1,3 @@
-import { motion } from 'motion/react'
 import { ArrowLeftRight } from 'lucide-react'
 import { useStore } from '../lib/store'
 import { useMoney } from '../lib/hooks'
@@ -21,8 +20,7 @@ export const TxItem = ({ tx, showDate }: { tx: Transaction; showDate?: boolean }
     .filter(Boolean)
     .join(' · ')
   return (
-    <motion.button
-      layout="position"
+    <button
       type="button"
       onClick={() => openSheet({ kind: 'tx', id: tx.id })}
       className="flex w-full items-center gap-3 rounded-2xl px-2 py-2.5 text-left transition hover:bg-surface-2 active:scale-[0.99]"
@@ -55,6 +53,6 @@ export const TxItem = ({ tx, showDate }: { tx: Transaction; showDate?: boolean }
       >
         {tx.type === 'expense' ? fmt(-tx.amount) : tx.type === 'income' ? fmt(tx.amount, { sign: true }) : fmt(tx.amount)}
       </span>
-    </motion.button>
+    </button>
   )
 }

@@ -143,16 +143,11 @@ export const CategoryDonut = ({
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-        <motion.div
-          key={a?.id ?? 'total'}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="px-6"
-        >
+        <div key={a?.id ?? 'total'} className="px-6">
           <div className="text-xs font-semibold text-muted">{a ? `${a.icon} ${a.name}` : 'Total'}</div>
           <div className="text-xl font-extrabold tracking-tight">{fmt(a ? a.value : total)}</div>
           {a && total > 0 && <div className="text-xs font-semibold text-ink-2">{Math.round((a.value / total) * 100)}%</div>}
-        </motion.div>
+        </div>
       </div>
     </div>
   )
@@ -178,12 +173,7 @@ export const CategoryList = ({
         const before = prev?.get(d.category.id) ?? 0
         const delta = prev && before > 0 ? (d.total - before) / before : null
         return (
-          <motion.li
-            key={d.category.id}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.03 }}
-          >
+          <li key={d.category.id}>
             <button
               type="button"
               onClick={() => onClick?.(d.category.id)}
@@ -226,7 +216,7 @@ export const CategoryList = ({
                 </span>
               </span>
             </button>
-          </motion.li>
+          </li>
         )
       })}
     </ul>

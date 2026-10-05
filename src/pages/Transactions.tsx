@@ -76,12 +76,7 @@ export default function Transactions() {
       <div className="space-y-3">
         <AnimatePresence initial={false}>
           {searching && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
+            <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
               <Input
                 autoFocus
                 value={query}
@@ -180,7 +175,7 @@ export default function Transactions() {
         ) : (
           groups.map((g) => (
             <section key={g.date}>
-              <div className="sticky top-[calc(env(safe-area-inset-top)+64px)] z-10 -mx-1 mb-1 flex items-baseline justify-between bg-bg/85 px-1 py-1.5 backdrop-blur">
+              <div className="sticky top-[calc(env(safe-area-inset-top)+64px)] z-10 -mx-1 mb-1 flex items-baseline justify-between bg-bg px-1 py-1.5">
                 <h3 className="text-sm font-bold">{fmtRelativeDay(g.date)}</h3>
                 <span className="text-xs font-semibold text-muted">
                   {g.expense > 0 && fmt(-g.expense)}
