@@ -1,5 +1,9 @@
 # 💸 Mis Finanzas
 
+### 👉 [Abrir la app: benjaavmm.github.io/Appfinanzas](https://benjaavmm.github.io/Appfinanzas/)
+
+> Para instalarla en el celular, abre **ese link** (no esta página de GitHub) y desde ahí usa "Instalar app".
+
 App personal para ordenar tu dinero: **cuánto tienes, en qué gastas, quién te debe, cuánto pagas en suscripciones** y un asistente que aprende de tus gastos para avisarte a tiempo.
 
 Está pensada primero para el **celular** (se instala como app y funciona sin internet), pero también se ve bien en el computador.
@@ -47,7 +51,7 @@ Cada vez que se suban cambios a la rama principal, el workflow revisa el código
 
 ## Instalarla en el celular
 
-- **Android (Chrome):** abre el link → menú **⋮** → **Instalar app**. También aparece un botón en **Ajustes → Instalar en tu teléfono**.
+- **Android (Chrome):** abre **https://benjaavmm.github.io/Appfinanzas/** → menú **⋮** → **Instalar app** (o "Agregar a la pantalla principal"). Si lo haces desde la página de GitHub, Chrome intentará instalar GitHub y dirá que no se puede. También aparece un botón en **Ajustes → Instalar en tu teléfono**.
 - **iPhone (Safari):** abre el link → botón **Compartir** → **Agregar a inicio**.
 
 Queda con su ícono, se abre a pantalla completa y se actualiza sola cuando hay una versión nueva.
