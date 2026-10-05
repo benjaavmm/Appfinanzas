@@ -40,14 +40,6 @@ Está pensada primero para el **celular** (se instala como app y funciona sin in
 
 > ⚠️ Como los datos viven en tu teléfono, si borras los datos del navegador o cambias de teléfono, se pierden. Usa **Ajustes → Descargar respaldo** de vez en cuando (y "Restaurar respaldo" en el teléfono nuevo).
 
-## Publicarla (una sola vez, ~1 minuto)
-
-1. En GitHub, entra al repositorio → **Settings → Pages**.
-2. En **Build and deployment → Source**, elige **GitHub Actions**.
-3. Ve a la pestaña **Actions**, abre **"Verificar y publicar"** y pulsa **Run workflow** (o simplemente haz un nuevo push).
-4. Cuando termine, tu app estará en: **https://benjaavmm.github.io/Appfinanzas/**
-
-Cada vez que se suban cambios a la rama principal, el workflow revisa el código (formato, tipos y pruebas) y vuelve a publicar solo.
 
 ## Instalarla en el celular
 
@@ -56,24 +48,7 @@ Cada vez que se suban cambios a la rama principal, el workflow revisa el código
 
 Queda con su ícono, se abre a pantalla completa y se actualiza sola cuando hay una versión nueva.
 
-## Correrla en tu computador
 
-Requiere [Node.js](https://nodejs.org) 20.19 o superior.
-
-```bash
-npm install
-npm run dev            # abre http://localhost:5173
-npm run dev -- --host  # para abrirla desde el celular en la misma red wifi
-```
-
-Otros comandos:
-
-```bash
-npm test               # pruebas de la lógica financiera
-npm run typecheck      # revisión de tipos
-npm run build          # versión de producción en dist/
-npm run format         # formatea el código
-```
 
 Para probar todo sin escribir datos, en la pantalla de bienvenida toca **"Explorar con datos de ejemplo"** (o en Ajustes → Cargar datos de ejemplo).
 
@@ -97,9 +72,3 @@ src/
   pages/          pantallas (Inicio, Movimientos, Análisis, Préstamos…)
 ```
 
-## Ideas para más adelante
-
-- Sincronizar entre celular y computador (por ejemplo con Supabase, que tiene plan gratis).
-- Notificaciones push antes de cada cobro.
-- Importar la cartola del banco (CSV/Excel).
-- Escanear boletas con la cámara.
