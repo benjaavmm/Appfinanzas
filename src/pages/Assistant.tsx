@@ -1,13 +1,15 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { create } from 'zustand'
-import { ArrowUp, Bot, Mic, RotateCcw } from 'lucide-react'
+import { ArrowUp, Check, Mic, RotateCcw, Smile } from 'lucide-react'
 import { useData, useMoney, useToday, vibrate } from '../lib/hooks'
+import { useStore } from '../lib/store'
 import { openSheet } from '../lib/ui'
-import { answer, STARTER_SUGGESTIONS, type ChatMemory, type Reply, type ReplyAction } from '../features/assistant/engine'
+import { answer, welcome, type AssistantPrefs, type ChatMemory, type Reply, type ReplyAction } from '../features/assistant/engine'
+import { DEFAULT_BOT_NAME, DEFAULT_PERSONALITY, PERSONALITIES, type PersonalityId } from '../features/assistant/personality'
 import { useDictation } from '../features/quick/speech'
 import { TxItem } from '../components/TxItem'
-import { cx, IconButton, PageHeader } from '../components/ui'
+import { Button, Card, cx, Field, IconButton, Input, PageHeader } from '../components/ui'
 
 interface Msg {
   id: number
@@ -39,9 +41,23 @@ const TONE: Record<string, string> = { good: 'text-good', bad: 'text-bad', muted
 
 const BotBubble = ({ reply, onAction }: { reply: Reply; onAction: (a: ReplyAction) => void }) => (
   <div className="max-w-[92%] min-w-0 space-y-2 rounded-3xl rounded-tl-lg border border-line bg-surface p-4 shadow-card">
-    <p className="text-[15px] leading-relaxed">
+    <p className="text-[15px] leading-relaxed whitespace-pre-line">
       <Rich text={reply.text} />
     </p>
+    {reply.steps && reply.steps.length > 0 && (
+      <ol className="space-y-1.5 rounded-2xl bg-surface-2 p-3">
+        {reply.steps.map((st, i) => (
+          <li key={i} className="flex gap-2.5 text-sm">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-bold text-brand">
+              {i + 1}
+            </span>
+            <span className="min-w-0 pt-0.5">
+              <Rich text={st} />
+            </span>
+          </li>
+        ))}
+      </ol>
+    )}
     {reply.rows && reply.rows.length > 0 && (
       <ul className="divide-y divide-line rounded-2xl bg-surface-2 px-3">
         {reply.rows.map((r, i) => (
@@ -97,11 +113,83 @@ const Chips = ({ items, onPick }: { items: string[]; onPick: (s: string) => void
   </div>
 )
 
-const Avatar = ({ children }: { children?: ReactNode }) => (
-  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#6655f5,#c2508f)] text-white">
-    {children ?? <Bot className="size-4" />}
+const Avatar = ({ children, size = 32 }: { children?: ReactNode; size?: number }) => (
+  <span
+    className="flex shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#6655f5,#c2508f)] text-white"
+    style={{ width: size, height: size, fontSize: size * 0.5 }}
+    aria-hidden
+  >
+    {children}
   </span>
 )
+
+const isPersonality = (v?: string): v is PersonalityId => !!v && v in PERSONALITIES
+
+/** Elegir nombre y personalidad del asistente */
+const PersonalityPanel = ({ onDone }: { onDone: () => void }) => {
+  const saved = useStore((s) => s.settings.assistant)
+  const updateSettings = useStore((s) => s.updateSettings)
+  const [name, setName] = useState(saved?.name ?? '')
+  const current = isPersonality(saved?.personality) ? saved.personality : DEFAULT_PERSONALITY
+  const save = (patch: { name?: string; personality?: string }) =>
+    updateSettings({ assistant: { ...useStore.getState().settings.assistant, ...patch } })
+  return (
+    <Card className="mb-4">
+      <Field label="Nombre del asistente">
+        <Input
+          value={name}
+          maxLength={20}
+          placeholder={DEFAULT_BOT_NAME}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => save({ name: name.trim() || undefined })}
+        />
+      </Field>
+      <p className="mt-4 mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Personalidad</p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {(Object.keys(PERSONALITIES) as PersonalityId[]).map((id) => {
+          const p = PERSONALITIES[id]
+          const on = id === current
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                vibrate(8)
+                save({ personality: id })
+              }}
+              className={cx(
+                'flex items-start gap-3 rounded-2xl border p-3 text-left transition active:scale-[0.99]',
+                on ? 'border-brand bg-brand-soft' : 'border-line bg-surface-2',
+              )}
+              aria-pressed={on}
+            >
+              <span className="text-2xl" aria-hidden>
+                {p.emoji}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5 font-bold">
+                  {p.label} {on && <Check className="size-4 text-brand" />}
+                </span>
+                <span className="block text-xs text-muted">{p.description}</span>
+                <span className="mt-1 block text-xs text-ink-2 italic">“{p.sample}”</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      <Button
+        block
+        className="mt-4"
+        onClick={() => {
+          save({ name: name.trim() || undefined })
+          onDone()
+        }}
+      >
+        Listo
+      </Button>
+    </Card>
+  )
+}
 
 export default function Assistant() {
   const data = useData()
@@ -110,6 +198,13 @@ export default function Assistant() {
   const navigate = useNavigate()
   const { msgs, typing } = useChat()
   const [text, setText] = useState('')
+  const [editing, setEditing] = useState(false)
+  const assistant = data.settings.assistant
+  const prefs: AssistantPrefs = {
+    botName: assistant?.name?.trim() || DEFAULT_BOT_NAME,
+    personality: isPersonality(assistant?.personality) ? assistant.personality : DEFAULT_PERSONALITY,
+  }
+  const persona = PERSONALITIES[prefs.personality!]
   const timer = useRef(0)
   const dictation = useDictation((t, final) => {
     setText(t)
@@ -126,14 +221,19 @@ export default function Assistant() {
     useChat.setState((s) => ({ msgs: [...s.msgs, { id: nextId++, from: 'me', text: question }], typing: true }))
     window.clearTimeout(timer.current)
     // Una pequeña pausa para que se sienta como conversación
-    timer.current = window.setTimeout(() => {
-      const res = answer(question, data, today, fmt, memory)
-      useChat.setState((s) => ({
-        msgs: [...s.msgs, { id: nextId++, from: 'bot', text: res.reply.text, reply: res.reply }],
-        memory: res.memory,
-        typing: false,
-      }))
-    }, 450)
+    const turn = useChat.getState().msgs.length
+    const res = answer(question, data, today, fmt, memory, { ...prefs, turn })
+    // Una pequeña pausa (según el largo) para que se sienta como conversación
+    timer.current = window.setTimeout(
+      () => {
+        useChat.setState((s) => ({
+          msgs: [...s.msgs, { id: nextId++, from: 'bot', text: res.reply.text, reply: res.reply }],
+          memory: res.memory,
+          typing: false,
+        }))
+      },
+      Math.min(1200, 350 + res.reply.text.length * 3),
+    )
   }
 
   useEffect(() => () => window.clearTimeout(timer.current), [])
@@ -155,37 +255,43 @@ export default function Assistant() {
   }
 
   const last = msgs[msgs.length - 1]
-  const name = data.settings.userName
+  const hello = msgs.length === 0 ? welcome(data, today, fmt, prefs) : null
 
   return (
     <div className="flex min-h-[calc(100dvh-9rem)] flex-col">
       <PageHeader
-        title="Asistente"
-        subtitle="Responde con tus datos · sin internet"
+        title={prefs.botName!}
+        subtitle={`${persona.emoji} ${persona.label} · responde con tus datos, sin internet`}
         actions={
-          msgs.length > 0 && (
-            <IconButton label="Nueva conversación" onClick={() => useChat.setState({ msgs: [], memory: {} })}>
-              <RotateCcw className="size-5" />
+          <>
+            <IconButton label="Personalidad" onClick={() => setEditing((e) => !e)}>
+              <Smile className="size-5" />
             </IconButton>
-          )
+            {msgs.length > 0 && (
+              <IconButton label="Nueva conversación" onClick={() => useChat.setState({ msgs: [], memory: {} })}>
+                <RotateCcw className="size-5" />
+              </IconButton>
+            )}
+          </>
         }
       />
 
+      {editing && <PersonalityPanel onDone={() => setEditing(false)} />}
+
       <div className="flex-1 space-y-4 pb-4">
-        {msgs.length === 0 && (
-          <div className="pt-2">
-            <div className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(135deg,#6655f5,#c2508f)] p-5 text-white">
-              <div className="pointer-events-none absolute -top-12 -right-12 size-40 rounded-full bg-white/15" />
-              <span className="relative flex size-12 items-center justify-center rounded-2xl bg-white/20 text-2xl">✨</span>
-              <h2 className="relative mt-3 text-xl font-extrabold">¡Hola{name ? ` ${name}` : ''}! ¿Qué quieres saber?</h2>
-              <p className="relative mt-1 text-sm text-white/85">
-                Pregúntame por tus gastos, préstamos, tarjetas o suscripciones. Uso solo los datos de tu app y nada sale de tu
-                teléfono.
-              </p>
+        {hello && (
+          <>
+            <div className="flex items-start gap-2 pt-2">
+              <Avatar>{persona.emoji}</Avatar>
+              <BotBubble reply={hello} onAction={onAction} />
             </div>
-            <p className="mt-5 mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Prueba con</p>
-            <Chips items={[...STARTER_SUGGESTIONS, 'Dame un consejo', 'gasté 5 lucas en uber']} onPick={send} />
-          </div>
+            <div className="pl-10">
+              <Chips
+                items={[...hello.suggestions!, 'Dame un consejo', '¿Me alcanza para unas zapatillas de 60 lucas?']}
+                onPick={send}
+              />
+            </div>
+          </>
         )}
 
         {msgs.map((m) =>
@@ -197,7 +303,7 @@ export default function Assistant() {
             </div>
           ) : (
             <div key={m.id} className="flex items-start gap-2">
-              <Avatar />
+              <Avatar>{persona.emoji}</Avatar>
               <BotBubble reply={m.reply!} onAction={onAction} />
             </div>
           ),
@@ -205,7 +311,7 @@ export default function Assistant() {
 
         {typing && (
           <div className="flex items-start gap-2">
-            <Avatar />
+            <Avatar>{persona.emoji}</Avatar>
             <div
               className="flex gap-1 rounded-3xl rounded-tl-lg border border-line bg-surface px-4 py-3.5"
               aria-label="Escribiendo"

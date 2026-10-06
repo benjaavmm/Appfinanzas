@@ -20,6 +20,7 @@ import {
   accountBalances,
   byCategory,
   debtTotals,
+  goalMonthlyNeeded,
   goalSaved,
   inRange,
   loanRemaining,
@@ -29,17 +30,20 @@ import {
   sumType,
   topPlaces,
   totalBalance,
+  weekdayPattern,
 } from '../../lib/finance'
 import { normalizeText } from '../../lib/format'
 import { generateInsights, healthScore, monthStats } from '../../lib/insights'
-import { monthlyEquivalent, upcomingCharges } from '../../lib/recurring'
+import { frequencyLabel, monthlyEquivalent, upcomingCharges } from '../../lib/recurring'
 import { cardSummary } from '../../lib/credit'
-import type { Category, DateStr, FinanceData, Transaction } from '../../lib/types'
+import type { Category, DateStr, FinanceData, Goal, Subscription, Transaction } from '../../lib/types'
 import { findAmount, fold } from '../quick/amount'
 import { keywordCategory } from '../quick/keywords'
 
 export type { Fmt, Reply, ReplyAction, ReplyRow } from './types'
 import type { Fmt, Reply, ReplyRow } from './types'
+import { APP_KNOWLEDGE, FINANCE_KNOWLEDGE, type KnowledgeEntry } from './knowledge'
+import { DEFAULT_BOT_NAME, DEFAULT_PERSONALITY, PERSONALITIES, type Moment, type PersonalityId } from './personality'
 
 /** Lo que recuerda de la pregunta anterior para entender "¿y el mes pasado?" */
 export interface ChatMemory {
@@ -62,6 +66,8 @@ interface Subject {
   place?: string
   accountId?: string
   person?: string
+  subscription?: Subscription
+  goal?: Goal
 }
 
 type Intent =
@@ -84,6 +90,16 @@ type Intent =
   | 'upcoming'
   | 'tips'
   | 'spent'
+  | 'afford'
+  | 'savePlan'
+  | 'count'
+  | 'lastTime'
+  | 'saved'
+  | 'weekday'
+  | 'ants'
+  | 'installments'
+  | 'subDetail'
+  | 'monthlyAvg'
 
 export const STARTER_SUGGESTIONS = [
   '¿Cómo voy este mes?',
@@ -156,6 +172,19 @@ export const readPeriod = (q: string, today: DateStr): Period | undefined => {
     return range(d, d, 'ayer', 'anteayer')
   }
   const monday = addDaysStr(today, -weekdayIndex(today))
+  if (has(q, 'fin de semana', 'finde')) {
+    const wd = weekdayIndex(today)
+    const past = has(q, 'pasado', 'anterior')
+    // Sábado y domingo de esta semana (si ya llegó) o del fin de semana anterior
+    const sat = wd >= 5 && !past ? addDaysStr(monday, 5) : addDaysStr(monday, -2)
+    const sun = addDaysStr(sat, 1)
+    return range(
+      sat,
+      sun > today ? today : sun,
+      wd >= 5 && !past ? 'este fin de semana' : 'el fin de semana pasado',
+      'el fin de semana anterior',
+    )
+  }
   if (has(q, 'semana pasada'))
     return range(addDaysStr(monday, -7), addDaysStr(monday, -1), 'la semana pasada', 'la semana anterior')
   if (has(q, 'semana')) return range(monday, today, 'esta semana', 'la semana pasada')
@@ -247,6 +276,21 @@ const readSubject = (q: string, words: string[], data: FinanceData): Subject => 
     return k.length >= 3 && new RegExp(`(^|\\s)${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`).test(q)
   })
   if (person) s.person = person.name
+  const wordRe = (k: string) => new RegExp(`(^|\\s)${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`)
+  const sub = data.subscriptions
+    .map((x) => ({ x, k: fold(x.name) }))
+    .filter(
+      ({ k }) => k.length >= 3 && (wordRe(k).test(q) || k.split(/\s+/).some((part) => part.length >= 5 && words.includes(part))),
+    )
+    .sort((a, b) => b.k.length - a.k.length)[0]
+  if (sub) s.subscription = sub.x
+  const goal = data.goals
+    .map((g) => ({ g, k: fold(g.name) }))
+    .filter(
+      ({ k }) => k.length >= 3 && (q.includes(k) || k.split(/\s+/).some((part) => part.length >= 5 && words.includes(part))),
+    )
+    .sort((a, b) => b.k.length - a.k.length)[0]
+  if (goal) s.goal = goal.g
   return s
 }
 
@@ -255,19 +299,117 @@ const REGISTER_START =
 
 export const readIntent = (q: string, hasAmount: boolean): Intent | undefined => {
   if (REGISTER_START.test(q) && hasAmount && !has(q, 'cuanto')) return 'register'
-  if (/^(hola|buenas|hey|ola|ayuda|help)\b/.test(q) || has(q, 'que puedes', 'que sabes', 'que haces', 'como funciona'))
+  if (
+    /^(ayuda|help)\b/.test(q) ||
+    has(q, 'que puedes', 'que sabes hacer', 'que haces', 'en que me ayudas', 'que te puedo preguntar')
+  )
     return 'help'
-  if (has(q, 'me debe', 'me deben', 'deudores', 'cobrar', 'quien me')) return 'owedToMe'
+  if (
+    has(
+      q,
+      'me alcanza',
+      'alcanza para',
+      'puedo comprar',
+      'puedo comprarme',
+      'me puedo comprar',
+      'podre comprar',
+      'conviene comprar',
+      'deberia comprar',
+      'me compro',
+      'puedo darme el gusto',
+    )
+  )
+    return 'afford'
+  if (/\bsi (ahorro|ahorrara|junto|guardo|aparto)\b/.test(q)) return 'savePlan'
+  if (has(q, 'cuantas veces', 'cuantos pedidos', 'cuantas compras', 'con que frecuencia', 'cada cuanto')) return 'count'
+  if (has(q, 'ultima vez', 'cuando fue que', 'cuando fui', 'cuando pague', 'cuando compre', 'cuando pedi')) return 'lastTime'
+  if (has(q, 'hormiga', 'gastos chicos', 'gastos pequenos', 'compras chicas')) return 'ants'
+  if (has(q, 'que dia gasto', 'que dias gasto', 'que dia de la semana', 'dia de la semana', 'que dia gaste mas', 'en que dia'))
+    return 'weekday'
+  if (
+    has(
+      q,
+      'cuanto pago en cuotas',
+      'cuotas al mes',
+      'cuotas pendientes',
+      'cuantas cuotas',
+      'cuanto debo en cuotas',
+      'pago en cuotas',
+      'cuotas me quedan',
+      'mis cuotas',
+    )
+  )
+    return 'installments'
+  if (has(q, 'tarjeta', 'cupo', 'cuota', 'estado de cuenta', 'credito', 'facturacion')) return 'card'
+  if (
+    has(
+      q,
+      'cuanto ahorre',
+      'cuanto he ahorrado',
+      'cuanto me sobro',
+      'cuanto me sobra',
+      'cuanto ahorro',
+      'ahorre este',
+      'ahorre el',
+      'logre ahorrar',
+      'estoy ahorrando',
+    )
+  )
+    return 'saved'
+  if (has(q, 'me falta para', 'falta para la meta', 'falta para mi meta', 'cuando llego a', 'cuando completo')) return 'goals'
+  if (has(q, 'me debe', 'me deben', 'deudores', 'por cobrar', 'quien me')) return 'owedToMe'
   if (has(q, 'le debo', 'debo', 'mis deudas', 'deuda')) return 'iOwe'
-  if (has(q, 'suscrip', 'pagos fijos', 'gastos fijos', 'netflix', 'spotify')) return 'subs'
-  if (has(q, 'tarjeta', 'cupo', 'cuota', 'estado de cuenta', 'credito')) return 'card'
+  if (has(q, 'suscrip', 'pagos fijos', 'gastos fijos', 'cobros fijos')) return 'subs'
   if (has(q, 'presupuesto', 'puedo gastar', 'me queda para', 'cuanto me queda', 'limite')) return 'budget'
   if (has(q, 'meta', 'ahorrando para', 'objetivo')) return 'goals'
-  if (has(q, 'se vienen', 'proximo', 'proximos', 'vence', 'vencen', 'tengo que pagar', 'que pagos', 'por pagar', 'cobros'))
+  if (
+    has(
+      q,
+      'se vienen',
+      'proximo',
+      'proximos',
+      'vence',
+      'vencen',
+      'tengo que pagar',
+      'que pagos',
+      'por pagar',
+      'cobros',
+      'agenda de pagos',
+    )
+  )
     return 'upcoming'
-  if (has(q, 'consejo', 'tip', 'recomienda', 'como ahorro', 'ahorrar mas', 'gastar menos', 'ayudame a')) return 'tips'
+  if (
+    has(
+      q,
+      'consejo',
+      'tip',
+      'recomienda',
+      'recomendacion',
+      'como ahorro',
+      'ahorrar mas',
+      'gastar menos',
+      'ayudame a',
+      'como mejoro',
+      'que hago para',
+    )
+  )
+    return 'tips'
   if (has(q, 'compar', ' vs ', 'versus', 'mas que el', 'menos que el', 'diferencia')) return 'compare'
-  if (has(q, 'mas grande', 'mas caro', 'mayor gasto', 'gastos grandes', 'compra mas')) return 'biggest'
+  if (has(q, 'mas grande', 'mas caro', 'mayor gasto', 'gastos grandes', 'compra mas', 'gasto mas alto')) return 'biggest'
+  if (
+    has(
+      q,
+      'promedio mensual',
+      'promedio al mes',
+      'promedio por mes',
+      'al mes en promedio',
+      'normalmente gasto',
+      'cuanto gasto al mes',
+      'gasto mensual',
+      'en un mes normal',
+    )
+  )
+    return 'monthlyAvg'
   if (
     has(
       q,
@@ -278,9 +420,12 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
       'donde gasto',
       'en que se me va',
       'se me va la plata',
-      'top',
+      'se me va la plata',
+      /\btop\b/,
       'ranking',
       'mas gasto',
+      'por categoria',
+      'categorias',
     )
   )
     return 'top'
@@ -297,13 +442,33 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
       'dinero tengo',
       'patrimonio',
       'disponible',
+      'cuanta plata hay',
+      'cuanto hay en',
     )
   )
     return 'balance'
-  if (has(q, 'ingres', 'gane', 'me pagaron', 'recibi', 'sueldo', 'cuanto entro')) return 'income'
-  if (has(q, 'como voy', 'como vamos', 'como estoy', 'como me va', 'resumen', 'salud', 'balance del mes', 'como ando', 'como va'))
+  if (has(q, 'ingres', 'gane', 'me pagaron', 'recibi', 'sueldo', 'cuanto entro', 'me entro')) return 'income'
+  if (
+    has(
+      q,
+      'como voy',
+      'como vamos',
+      'como estoy',
+      'como me va',
+      'resumen',
+      'salud',
+      'balance del mes',
+      'como ando',
+      'como va',
+      'proyeccion',
+      'fin de mes',
+      'cerrare el mes',
+      'como termino',
+      'como cierro',
+    )
+  )
     return 'status'
-  if (has(q, 'gast', 'pague', 'compre', 'se fue', 'consumi')) return 'spent'
+  if (has(q, 'gast', 'pague', 'compre', 'se fue', 'consumi', 'cuanto me cobr', 'cuanto sale', 'cuanto cuesta')) return 'spent'
   return undefined
 }
 
@@ -352,11 +517,19 @@ const spentReply = (data: FinanceData, s: Subject, p: Period, fmt: Fmt, kind: 'e
     }
   }
   let text = `${verb} **${fmt(total)}** ${what} ${p.label}`.replace(/\s+/g, ' ')
+  let mood: Reply['mood'] = 'neutral'
   if (p.prev) {
     const before = inRange(data.transactions, p.prev.from, p.prev.to)
       .filter((t) => t.type === kind && matchTx(t, s))
       .reduce((a, t) => a + t.amount, 0)
     text += compareLine(total, before, p.prev.label, fmt, kind === 'expense')
+    const change = pct(total, before)
+    if (before > 0)
+      mood = (kind === 'expense' ? change <= -10 : change >= 10)
+        ? 'good'
+        : (kind === 'expense' ? change >= 15 : change <= -15)
+          ? 'bad'
+          : 'neutral'
   }
   text += '.'
   const rows: ReplyRow[] = [
@@ -378,6 +551,8 @@ const spentReply = (data: FinanceData, s: Subject, p: Period, fmt: Fmt, kind: 'e
   return {
     text,
     rows,
+    mood,
+    kind: kind === 'expense' ? 'spent' : 'income',
     txs: sortTx(txs).slice(0, 4),
     suggestions: [p.label === 'este mes' ? '¿Y el mes pasado?' : '¿Y este mes?', '¿En qué gasto más?'],
   }
@@ -409,7 +584,10 @@ const statusReply = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
   ]
   if (cats) rows.push({ icon: cats.category.icon, label: `Donde más gastas: ${cats.category.name}`, value: fmt(cats.total) })
   if (health.enoughData) rows.push({ icon: '💚', label: 'Salud financiera', value: `${health.score}/100 · ${health.label}` })
-  return { text, rows, suggestions: ['¿En qué gasto más?', 'Compara con el mes pasado', 'Dame un consejo'] }
+  const overBudget = budget ? st.projected > budget * 1.05 || st.spent > budget : false
+  const vsPrev = st.spentPrevSamePoint ? pct(st.spent, st.spentPrevSamePoint) : 0
+  const mood: Reply['mood'] = overBudget || vsPrev >= 20 ? 'bad' : vsPrev <= -10 ? 'good' : 'neutral'
+  return { text, rows, mood, kind: 'status', suggestions: ['¿En qué gasto más?', 'Compara con el mes pasado', 'Dame un consejo'] }
 }
 
 const topReply = (data: FinanceData, p: Period, fmt: Fmt): Reply => {
@@ -524,6 +702,8 @@ const loansReply = (data: FinanceData, today: DateStr, fmt: Fmt, dir: 'lent' | '
       value: fmt(dir === 'lent' ? p.owedToMe : p.iOwe),
       tone: p.hasOverdue ? 'bad' : undefined,
     })),
+    mood: people.some((p) => p.hasOverdue) ? 'bad' : 'neutral',
+    kind: dir === 'lent' ? 'owedToMe' : 'iOwe',
     actions: [{ label: 'Ver préstamos', kind: 'nav', to: '/prestamos' }],
   }
 }
@@ -603,6 +783,8 @@ const cardReply = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
   return {
     text: parts.length ? `${parts.join('. ')}.` : 'No tienes pagos de tarjeta pendientes ahora 👌.',
     rows,
+    kind: 'card',
+    mood: parts.some((x) => x.includes('venció')) ? 'bad' : parts.length ? 'neutral' : 'good',
     actions: cards[0] ? [{ label: 'Ver tarjeta', kind: 'sheet', sheet: { kind: 'card', id: cards[0].id } }] : undefined,
   }
 }
@@ -639,7 +821,14 @@ const budgetReply = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
         ? `No tienes un presupuesto total, pero con lo que te entró este mes te quedan **${fmt(left)}** (${fmt(Math.floor(left / daysLeft))} por día).`
         : `Este mes gastaste ${fmt(-left)} más de lo que te entró.`
   } else text = 'Aún no tienes presupuesto ni ingresos este mes. Define un presupuesto y te digo cuánto puedes gastar por día.'
-  return { text, rows, actions: [{ label: 'Ver presupuestos', kind: 'nav', to: '/presupuestos' }] }
+  const over = budget ? st.spent > budget : st.income > 0 && st.spent > st.income
+  return {
+    text,
+    rows,
+    kind: 'budget',
+    mood: over ? 'bad' : 'neutral',
+    actions: [{ label: 'Ver presupuestos', kind: 'nav', to: '/presupuestos' }],
+  }
 }
 
 const goalsReply = (data: FinanceData, fmt: Fmt): Reply => {
@@ -726,10 +915,475 @@ const biggestReply = (data: FinanceData, s: Subject, p: Period, fmt: Fmt): Reply
   }
 }
 
-const helpReply = (name?: string): Reply => ({
-  text: `¡Hola${name ? ` ${name}` : ''}! 👋 Soy tu asistente de finanzas. Respondo con los datos de tu app (sin internet y sin enviar nada). Pregúntame cuánto gastaste en algo, cómo vas este mes, quién te debe, cuánto pagas en suscripciones o cuánto puedes gastar por día. También puedes decirme "gasté 5 lucas en uber" y lo anoto.`,
-  suggestions: STARTER_SUGGESTIONS,
+const liquidAccounts = (data: FinanceData) =>
+  data.accounts.filter((a) => !a.archived && (a.type === 'cash' || a.type === 'debit' || a.type === 'other'))
+
+/** Lo que ya está comprometido de aquí a fin de mes: suscripciones, tarjeta y deudas que vencen */
+const committedUntilMonthEnd = (data: FinanceData, today: DateStr) => {
+  const end = monthEnd(parseDate(today))
+  const subs = upcomingCharges(
+    data.subscriptions.filter((x) => x.active && liquidAccounts(data).some((a) => a.id === x.accountId)),
+    end,
+  ).reduce((s, c) => s + c.sub.amount, 0)
+  const bal = accountBalances(data)
+  const cards = data.accounts
+    .filter((a) => a.type === 'credit' && !a.archived)
+    .reduce((s, c) => {
+      const cs = cardSummary(c, data.transactions, bal.get(c.id) ?? 0, today)
+      return s + (cs.dueDate <= end ? cs.toPay : 0)
+    }, 0)
+  const debts = data.loans
+    .filter((l) => l.direction === 'borrowed' && l.dueDate && l.dueDate <= end)
+    .reduce((s, l) => s + loanRemaining(l), 0)
+  return { subs, cards, debts, total: subs + cards + debts }
+}
+
+const affordReply = (data: FinanceData, today: DateStr, fmt: Fmt, amount: number | undefined, what: string): Reply => {
+  if (!amount)
+    return {
+      text: '¿De cuánto es? Dime algo como **"¿me alcanza para unas zapatillas de 60 lucas?"** y lo calculo con tus cuentas.',
+      kind: 'afford',
+    }
+  const bal = accountBalances(data)
+  const liquid = liquidAccounts(data).reduce((s, a) => s + Math.max(0, bal.get(a.id) ?? 0), 0)
+  const committed = committedUntilMonthEnd(data, today)
+  const free = liquid - committed.total
+  const after = free - amount
+  const st = monthStats(data, today)
+  const budget = data.settings.monthlyBudget
+  const budgetLeft = budget ? budget - st.spent : undefined
+  const daysLeft = Math.max(1, st.totalDays - st.dayOfMonth + 1)
+  const thing = what ? ` ${what}` : ''
+  let react: Moment
+  let text: string
+  if (after >= 0 && amount <= free * 0.35 && (budgetLeft === undefined || amount <= budgetLeft)) {
+    react = 'affordYes'
+    text = `Sí te alcanza${thing}: después de pagar lo que ya tienes comprometido este mes te quedarían **${fmt(after)}**.`
+  } else if (after >= 0) {
+    react = 'affordTight'
+    text = `Te alcanza${thing}, pero **justo**: te quedarían ${fmt(after)} para lo que queda del mes (${fmt(Math.floor(after / daysLeft))} por día).`
+    if (budgetLeft !== undefined && amount > budgetLeft)
+      text += ` Además te pasarías de tu presupuesto por ${fmt(amount - Math.max(0, budgetLeft))}.`
+  } else {
+    react = 'affordNo'
+    text = `Con lo que tienes ahora **no te alcanza**${thing}: te faltarían **${fmt(-after)}** después de tus pagos del mes.`
+  }
+  const rows: ReplyRow[] = [
+    { icon: '💵', label: 'Plata en tus cuentas', value: fmt(liquid) },
+    { icon: '📌', label: 'Pagos que vienen este mes', value: fmt(-committed.total), tone: 'muted' },
+    { icon: '🛍️', label: `La compra${thing}`, value: fmt(-amount), tone: 'muted' },
+    { icon: after >= 0 ? '✅' : '⚠️', label: 'Te quedaría', value: fmt(after), tone: after >= 0 ? 'good' : 'bad' },
+  ]
+  if (budgetLeft !== undefined)
+    rows.push({
+      icon: '🎯',
+      label: 'Presupuesto que te queda',
+      value: fmt(budgetLeft),
+      tone: budgetLeft >= amount ? 'good' : 'bad',
+    })
+  const card = data.accounts.find((a) => a.type === 'credit' && !a.archived)
+  if (react !== 'affordYes' && card) {
+    const cs = cardSummary(card, data.transactions, bal.get(card.id) ?? 0, today)
+    if (cs.available !== undefined && cs.available >= amount)
+      text += ` Con la tarjeta tienes cupo (${fmt(cs.available)}); en **3 cuotas** serían ${fmt(Math.ceil(amount / 3))} al mes, pero recuerda que es deuda.`
+  }
+  const goal = data.goals.find((g) => goalSaved(g) < g.target)
+  if (react !== 'affordYes' && goal) text += ` Ojo, que también estás juntando para **${goal.icon} ${goal.name}**.`
+  return { text, rows, react, kind: 'afford', mood: react === 'affordNo' ? 'bad' : react === 'affordYes' ? 'good' : 'neutral' }
+}
+
+const savePlanReply = (data: FinanceData, fmt: Fmt, q: string, amount: number | undefined, goal?: Goal): Reply => {
+  if (!amount)
+    return { text: 'Dime cuánto: por ejemplo **"si ahorro 50 lucas al mes, ¿cuánto tendré en un año?"**', kind: 'savePlan' }
+  const perMonth = has(q, 'semana', 'semanal') ? amount * 4.345 : has(q, 'dia', 'diario') ? amount * 30.44 : amount
+  const yearsMatch = q.match(/(\d+)\s+anos?/)
+  const monthsMatch = q.match(/(\d+)\s+mes(es)?/)
+  const horizons = yearsMatch
+    ? [Number(yearsMatch[1]) * 12]
+    : monthsMatch
+      ? [Number(monthsMatch[1])]
+      : has(q, 'un ano', 'el ano', 'al ano')
+        ? [12]
+        : [3, 6, 12]
+  const rows: ReplyRow[] = horizons.map((m) => ({
+    icon: '📈',
+    label: m % 12 === 0 ? `En ${m / 12} ${m === 12 ? 'año' : 'años'}` : `En ${m} meses`,
+    value: fmt(Math.round(perMonth * m)),
+    tone: 'good',
+  }))
+  const targets = goal ? [goal] : data.goals.filter((g) => goalSaved(g) < g.target)
+  for (const g of targets.slice(0, 3)) {
+    const left = g.target - goalSaved(g)
+    const months = Math.ceil(left / perMonth)
+    rows.push({
+      icon: g.icon,
+      label: `Meta ${g.name}`,
+      value: `${months} ${months === 1 ? 'mes' : 'meses'}`,
+      sub: `Te faltan ${fmt(left)}`,
+    })
+  }
+  const last = horizons[horizons.length - 1]
+  return {
+    text: `Si ahorras **${fmt(Math.round(perMonth))} al mes**, en ${last % 12 === 0 ? `${last / 12} ${last === 12 ? 'año' : 'años'}` : `${last} meses`} juntarías **${fmt(Math.round(perMonth * last))}** (sin contar intereses).`,
+    rows,
+    kind: 'savePlan',
+    mood: 'good',
+    actions: [{ label: 'Crear meta de ahorro', kind: 'sheet', sheet: { kind: 'goal' } }],
+  }
+}
+
+const countReply = (data: FinanceData, s: Subject, p: Period, fmt: Fmt): Reply => {
+  if (!s.category && !s.place)
+    return { text: '¿Cuántas veces qué? Por ejemplo: **"¿cuántas veces pedí Uber este mes?"**', kind: 'count' }
+  const txs = inRange(data.transactions, p.from, p.to).filter((t) => t.type === 'expense' && matchTx(t, s))
+  const what = subjectLabel(s, data)
+  if (!txs.length) return { text: `No encontré gastos ${what} ${p.label}.`.replace(/\s+/g, ' '), kind: 'count' }
+  const total = txs.reduce((a, t) => a + t.amount, 0)
+  const last = sortTx(txs)[0]
+  const days = Math.max(
+    1,
+    daysBetween(
+      txs.reduce((m, t) => (t.date < m ? t.date : m), p.to),
+      p.to,
+    ) + 1,
+  )
+  const every = txs.length > 1 ? Math.max(1, Math.round(days / txs.length)) : null
+  return {
+    text: `${cap(p.label)} fueron **${txs.length} ${txs.length === 1 ? 'vez' : 'veces'}** ${what}, por **${fmt(total)}** en total (${fmt(Math.round(total / txs.length))} cada vez en promedio).`.replace(
+      /\s+/g,
+      ' ',
+    ),
+    rows: [
+      { icon: '🕐', label: 'La última vez', value: `${fmtDate(last.date)} · ${fmt(last.amount)}` },
+      ...(every ? [{ icon: '🔁', label: 'Más o menos', value: every === 1 ? 'todos los días' : `cada ${every} días` }] : []),
+    ],
+    kind: 'count',
+  }
+}
+
+const lastTimeReply = (data: FinanceData, s: Subject, today: DateStr, fmt: Fmt): Reply => {
+  if (!s.category && !s.place && !s.subscription)
+    return { text: '¿La última vez de qué? Por ejemplo: **"¿cuándo fue la última vez que fui al Líder?"**', kind: 'lastTime' }
+  const txs = sortTx(
+    data.transactions.filter((t) =>
+      s.subscription ? t.subscriptionId === s.subscription.id : t.type === 'expense' && matchTx(t, s),
+    ),
+  )
+  const what = s.subscription ? `de ${s.subscription.name}` : subjectLabel(s, data)
+  const last = txs[0]
+  if (!last) return { text: `No tengo registros ${what}.`, kind: 'lastTime' }
+  const ago = daysBetween(last.date, today)
+  return {
+    text: `La última vez ${what} fue el **${fmtDate(last.date)}**${ago === 0 ? ' (hoy)' : ago === 1 ? ' (ayer)' : ` (hace ${ago} días)`}, por **${fmt(last.amount)}**.`,
+    txs: txs.slice(0, 3),
+    kind: 'lastTime',
+  }
+}
+
+const savedReply = (data: FinanceData, p: Period, fmt: Fmt): Reply => {
+  const txs = inRange(data.transactions, p.from, p.to)
+  const income = sumType(txs, 'income')
+  const spent = sumType(txs, 'expense')
+  const net = income - spent
+  const toGoals = data.goals
+    .flatMap((g) => g.contributions)
+    .filter((c) => c.date >= p.from && c.date <= p.to)
+    .reduce((s, c) => s + c.amount, 0)
+  const rows: ReplyRow[] = [
+    { icon: '💰', label: 'Te entró', value: fmt(income), tone: 'good' },
+    { icon: '💸', label: 'Gastaste', value: fmt(spent), tone: 'bad' },
+    { icon: net >= 0 ? '🐷' : '⚠️', label: 'Diferencia', value: fmt(net, { sign: true }), tone: net >= 0 ? 'good' : 'bad' },
+  ]
+  if (toGoals) rows.push({ icon: '🎯', label: 'Apartado en metas', value: fmt(toGoals), tone: 'good' })
+  if (!income && !spent) return { text: `No tienes movimientos ${p.label}.`, kind: 'saved' }
+  const rate = income > 0 ? Math.round((net / income) * 100) : 0
+  return {
+    text:
+      net >= 0
+        ? `${cap(p.label)} te sobraron **${fmt(net)}**${income > 0 ? `: ahorraste el **${rate}%** de lo que te entró` : ''}.${rate >= 20 ? ' ¡Eso es excelente!' : ''}`
+        : `${cap(p.label)} gastaste **${fmt(-net)} más** de lo que te entró.`,
+    rows,
+    kind: 'saved',
+    mood: net >= 0 && rate >= 10 ? 'good' : net < 0 ? 'bad' : 'neutral',
+  }
+}
+
+const weekdayReply = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
+  const from = addDaysStr(today, -89)
+  const first = data.transactions.reduce((m, t) => (t.date < m ? t.date : m), today)
+  const pattern = weekdayPattern(data.transactions, first > from ? first : from, today)
+  const days = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
+  const ranked = pattern.map((p, i) => ({ ...p, day: days[i] })).sort((a, b) => b.avg - a.avg)
+  if (!ranked[0]?.total) return { text: 'Aún no tengo suficientes gastos para ver qué día gastas más.', kind: 'weekday' }
+  const low = ranked[ranked.length - 1]
+  return {
+    text: `El día que más gastas es el **${ranked[0].day}**: en promedio ${fmt(Math.round(ranked[0].avg))}. El más tranquilo es el ${low.day} (${fmt(Math.round(low.avg))}).`,
+    rows: pattern.map((p, i) => ({
+      label: cap(days[i]),
+      value: fmt(Math.round(p.avg)),
+      tone: days[i] === ranked[0].day ? ('bad' as const) : undefined,
+    })),
+    kind: 'weekday',
+  }
+}
+
+const antsReply = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
+  const st = monthStats(data, today)
+  const ref = st.avg3 || st.spent
+  const from = addDaysStr(today, -29)
+  const limit = Math.max(1, ref * 0.012)
+  const small = inRange(data.transactions, from, today).filter(
+    (t) => t.type === 'expense' && !t.subscriptionId && t.amount <= limit,
+  )
+  if (small.length < 3)
+    return { text: 'No veo gastos hormiga importantes en los últimos 30 días 🐜👍.', kind: 'ants', mood: 'good' }
+  const total = small.reduce((s, t) => s + t.amount, 0)
+  const places = topPlaces(small, 4)
+  return {
+    text: `En los últimos 30 días hiciste **${small.length} compras chicas** (hasta ${fmt(Math.round(limit))}) que suman **${fmt(total)}** 🐜. Al año serían unos ${fmt(Math.round(total * 12.2))}.`,
+    rows: places.map((pl) => ({
+      icon: '📍',
+      label: pl.name,
+      value: `${fmt(pl.total)} · ${pl.count} ${pl.count === 1 ? 'vez' : 'veces'}`,
+    })),
+    kind: 'ants',
+    mood: total > ref * 0.08 ? 'bad' : 'neutral',
+  }
+}
+
+const installmentsReply = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
+  const bal = accountBalances(data)
+  const plans = data.accounts
+    .filter((a) => a.type === 'credit' && !a.archived)
+    .flatMap((c) => cardSummary(c, data.transactions, bal.get(c.id) ?? 0, today).activePlans.map((pl) => ({ ...pl, card: c })))
+  if (!plans.length) return { text: 'No tienes compras en cuotas pendientes 🙌.', kind: 'installments', mood: 'good' }
+  const monthly = plans.reduce((s, pl) => s + pl.perInstallment, 0)
+  const remaining = plans.reduce((s, pl) => s + pl.remaining, 0)
+  return {
+    text: `Pagas **${fmt(monthly)} al mes** en cuotas (${plans.length} ${plans.length === 1 ? 'compra' : 'compras'}). Todavía te quedan **${fmt(remaining)}** por pagar.`,
+    rows: plans.map((pl) => ({
+      icon: '➗',
+      label: `${pl.tx.place || 'Compra'} · cuota ${pl.paid + 1} de ${pl.of}`,
+      sub: `Quedan ${fmt(pl.remaining)}`,
+      value: `${fmt(pl.perInstallment)}/mes`,
+    })),
+    kind: 'installments',
+    actions: [{ label: 'Ver tarjeta', kind: 'sheet', sheet: { kind: 'card', id: plans[0].card.id } }],
+  }
+}
+
+const subDetailReply = (data: FinanceData, sub: Subscription, today: DateStr, fmt: Fmt): Reply => {
+  const acc = data.accounts.find((a) => a.id === sub.accountId)
+  const next = upcomingCharges([sub], addDaysStr(today, 400))[0]
+  return {
+    text: sub.active
+      ? `**${sub.name}** te cuesta **${fmt(sub.amount)}** (${frequencyLabel(sub.frequency).toLowerCase()}), o sea ${fmt(Math.round(monthlyEquivalent(sub)))} al mes y ${fmt(Math.round(monthlyEquivalent(sub) * 12))} al año.`
+      : `**${sub.name}** está pausada: no se está cobrando.`,
+    rows: [
+      ...(next && sub.active ? [{ icon: '📅', label: 'Próximo cobro', value: `${fmtDate(next.date)}` }] : []),
+      ...(acc ? [{ icon: acc.icon, label: 'Se paga con', value: acc.name }] : []),
+    ],
+    kind: 'subDetail',
+    actions: [{ label: 'Ver suscripción', kind: 'sheet', sheet: { kind: 'sub', id: sub.id } }],
+  }
+}
+
+const monthlyAvgReply = (data: FinanceData, s: Subject, today: DateStr, fmt: Fmt): Reply => {
+  const ref = parseDate(today)
+  const months = [1, 2, 3].map((n) => shiftMonth(ref, -n))
+  const totals = months.map((m) => ({
+    m,
+    total: inRange(data.transactions, monthStart(m), monthEnd(m))
+      .filter((t) => t.type === 'expense' && matchTx(t, s))
+      .reduce((a, t) => a + t.amount, 0),
+  }))
+  const withData = totals.filter((t) => t.total > 0)
+  if (!withData.length) return { text: 'Aún no tengo meses completos para sacar un promedio.', kind: 'monthlyAvg' }
+  const avg = withData.reduce((a, t) => a + t.total, 0) / withData.length
+  const what = subjectLabel(s, data)
+  return {
+    text: `En un mes normal gastas unos **${fmt(Math.round(avg))}** ${what} (promedio de los últimos ${withData.length} ${withData.length === 1 ? 'mes' : 'meses'}).`.replace(
+      /\s+\(/,
+      ' (',
+    ),
+    rows: totals.map((t) => ({ label: fmtMonth(t.m), value: fmt(t.total) })),
+    kind: 'monthlyAvg',
+  }
+}
+
+const accountReply = (data: FinanceData, accountId: string, today: DateStr, fmt: Fmt): Reply => {
+  const acc = data.accounts.find((a) => a.id === accountId)!
+  const bal = accountBalances(data).get(acc.id) ?? 0
+  if (acc.type === 'credit') return cardReply({ ...data, accounts: [acc] }, today, fmt)
+  return {
+    text: `En **${acc.icon} ${acc.name}** tienes **${fmt(bal)}**.`,
+    kind: 'balance',
+    mood: bal < 0 ? 'bad' : 'neutral',
+    txs: sortTx(data.transactions.filter((t) => t.accountId === acc.id || t.toAccountId === acc.id)).slice(0, 3),
+  }
+}
+
+/* ───────────── Conocimiento: guía de la app y conceptos ───────────── */
+
+const KNOWLEDGE: KnowledgeEntry[] = [...APP_KNOWLEDGE, ...FINANCE_KNOWLEDGE]
+const KSTOP = new Set([
+  ...STOP,
+  'como',
+  'donde',
+  'puedo',
+  'hago',
+  'hacer',
+  'quiero',
+  'esta',
+  'esto',
+  'eso',
+  'son',
+  'sirve',
+  'una',
+  'uno',
+  'mas',
+  'muy',
+  'tengo',
+  'hay',
+  'cual',
+  'cuales',
+  'pongo',
+  'veo',
+])
+const stem = (w: string) => (w.length > 5 ? w.slice(0, 5) : w)
+
+const scoreEntry = (q: string, stems: Set<string>, e: KnowledgeEntry) => {
+  let best = 0
+  for (const t of e.triggers) {
+    const tw = t.split(' ').filter((w) => w && !KSTOP.has(w))
+    if (!tw.length) continue
+    let score = 0
+    if (new RegExp(`(^|\\s)${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`).test(q)) score = 3 + 3 * tw.length
+    else if (tw.every((w) => (w.length <= 3 ? q.split(' ').includes(w) : stems.has(stem(w)))))
+      score = (tw.length > 1 ? 2 : 1) * (2 + tw.length)
+    best = Math.max(best, score)
+  }
+  return best
+}
+
+export const findKnowledge = (q: string, kind?: KnowledgeEntry['kind']): { entry: KnowledgeEntry; score: number }[] => {
+  const stems = new Set(
+    q
+      .split(' ')
+      .filter((w) => w && !KSTOP.has(w))
+      .map(stem),
+  )
+  return KNOWLEDGE.filter((e) => !kind || e.kind === kind)
+    .map((entry) => ({ entry, score: scoreEntry(q, stems, entry) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+}
+
+const knowledgeReply = (e: KnowledgeEntry): Reply => ({
+  text: e.answer,
+  steps: e.steps,
+  actions: e.action ? [e.action] : undefined,
+  suggestions: e.related,
+  kind: `knowledge:${e.id}`,
 })
+
+const HOW_TO =
+  /^(como|donde|se puede|puedo|para que sirve|para que es|que hace|me explicas|explicame|ensename|que es|que son|que significa|cual es la diferencia|en que se diferencia|hay forma|hay alguna forma|es posible|existe)\b|\b(como (se|hago|puedo|agrego|anoto|creo|pongo|uso|activo|desactivo|borro|elimino|cambio|edito|escaneo|importo|instalo|exporto|configuro|registro|ingreso|divido|comparto|veo|saco|subo|bajo|recupero|restauro|actualizo|oculto|bloqueo|cierro|inicio))\b/
+const NOT_HOW_TO = /^(como (voy|vamos|estoy|me va|ando|va|cierro|termino|cerrare))\b/
+
+/* ───────────── Conversación ───────────── */
+
+const SMALLTALK: [Moment, RegExp][] = [
+  [
+    'areYouAI',
+    /\b(eres|sos) (una |un )?(ia|inteligencia artificial|robot|bot|chatgpt|humano|humana|persona|real)\b|\beres de verdad\b/,
+  ],
+  ['whoAreYou', /\b(quien eres|quien sos|como te llamas|cual es tu nombre|que eres|presentate)\b/],
+  ['howAreYou', /^(hola |wena |buenas )?(como estas|como te va|que tal|como andai|como andas|como estai|todo bien)\b/],
+  [
+    'thanks',
+    /^(muchas )?(gracias|grax|thanks|thank you|vale gracias|ok gracias|genial gracias|buena gracias)\b|\bmuchas gracias\b/,
+  ],
+  ['bye', /^(chao|chau|adios|nos vemos|bye|hasta luego|hasta pronto|me voy)\b/],
+  ['joke', /\b(chiste|algo gracioso|hazme reir|una talla|cuentame una talla|tallita)\b/],
+  ['motivate', /\b(motivame|motivacion|animame|dame animo|estoy desmotivad[oa]|no tengo ganas de ahorrar)\b/],
+  [
+    'sad',
+    /\b(estoy (sin plata|sin lucas|sin un peso|pato|endeudad[oa]|quebrad[oa]|en la quiebra|cort[oa])|no tengo (plata|lucas|ni un peso)|no me alcanza para nada|estoy (mal|preocupad[oa]) con (la plata|mis finanzas|las deudas|mis deudas))\b/,
+  ],
+  ['love', /\b(te quiero|te amo|eres mi amig[oa]|te adoro)\b/],
+  [
+    'insult',
+    /\b(eres (tont[oa]|wn|weon|aweonao|inutil|mal[oa]|pesim[oa]|idiota|estupid[oa]|lent[oa])|no sirves|no sabes nada|que tonto|que inutil)\b/,
+  ],
+  [
+    'compliment',
+    /\b(eres (bacan|genial|sec[oa]|la raja|util|lo maximo|el mejor|la mejor|inteligente|buenisim[oa]|crack)|buena respuesta|te pasaste|que buen[oa] eres|me encanta(s)?|excelente respuesta|buena luka|buena)\b$/,
+  ],
+  ['laugh', /^(ja){2,}|^(je){2,}|^(jsjs|jajs|xd|lol|jaj)/],
+]
+const GREETING = /^(hola+|holi|wena+|buenas|buenos dias|buenas tardes|buenas noches|hey|ola|que onda|alo|saludos)\b\s*/
+
+export interface AssistantPrefs {
+  botName?: string
+  personality?: PersonalityId
+  /** Número de mensaje en la conversación (para variar las frases) */
+  turn?: number
+}
+
+const hash = (s: string) => {
+  let h = 0
+  for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return h
+}
+
+export const personalityOf = (prefs: AssistantPrefs = {}) =>
+  PERSONALITIES[prefs.personality ?? DEFAULT_PERSONALITY] ?? PERSONALITIES[DEFAULT_PERSONALITY]
+
+/** Una frase de la personalidad para ese momento, con {name} y {bot} reemplazados */
+export const line = (moment: Moment, prefs: AssistantPrefs, userName: string, seed: number): string => {
+  const list = personalityOf(prefs)?.lines?.[moment]
+  if (!list?.length) return ''
+  return list[seed % list.length]
+    .replace(/\{name\}/g, userName ? ` ${userName}` : '')
+    .replace(/\{bot\}/g, prefs.botName || DEFAULT_BOT_NAME)
+}
+
+/** Saludo al abrir el chat, con un dato útil del momento */
+export const welcome = (data: FinanceData, today: DateStr, fmt: Fmt, prefs: AssistantPrefs = {}): Reply => {
+  const name = data.settings.userName?.trim().split(/\s+/)[0] ?? ''
+  const seed = hash(today) + (prefs.turn ?? 0)
+  const greet = line('greet', prefs, name, seed) || `¡Hola${name ? ` ${name}` : ''}!`
+  const top = data.transactions.length ? generateInsights(data, today, fmt)[0] : undefined
+  return {
+    text: top ? `${greet}\n\n${top.emoji} **${top.title}.** ${top.body}` : greet,
+    suggestions: STARTER_SUGGESTIONS,
+    kind: 'welcome',
+  }
+}
+
+const CAPABILITIES =
+  'Te respondo con los datos de tu app: cuánto gastaste y en qué, cómo vas este mes, quién te debe, tu tarjeta y sus cuotas, si te alcanza para algo, cuánto ahorraste y qué pagos se vienen. También te explico cómo usar la app y conceptos como el **CAE** o el **cupo**. Y si me dices **"gasté 5 lucas en uber"**, te ayudo a anotarlo.'
+
+const SMALLTALK_FALLBACK: Partial<Record<Moment, string>> = {
+  thanks: '¡De nada! 😊',
+  bye: '¡Chao! Aquí estaré cuando me necesites.',
+  notUnderstood: 'Mmm, no te entendí bien 🤔. Prueba preguntando de otra forma, por ejemplo:',
+  areYouAI:
+    'No soy una IA conectada a internet: soy un asistente que funciona dentro de tu app, con reglas y tus datos. Por eso nada sale de tu teléfono.',
+}
+
+const SMALLTALK_SUGGESTIONS: Partial<Record<Moment, string[]>> = {
+  sad: ['¿En qué gasto más?', '¿Cuánto puedo gastar por día?', 'Dame un consejo'],
+  joke: ['Otro chiste', '¿Cómo voy este mes?'],
+  motivate: ['¿Cuánto ahorré este mes?', 'Dame un consejo'],
+  whoAreYou: ['¿Qué puedes hacer?', '¿Cómo voy este mes?'],
+  areYouAI: ['¿Qué puedes hacer?', '¿Cómo voy este mes?'],
+}
+
+/** Temas que no tienen que ver con la app ni con la plata */
+const OFF_TOPIC =
+  /\b(clima|tiempo hace|futbol|partido|receta|cocinar|pelicula|serie|cancion|politica|presidente|noticias|horoscopo|tarea|matematica)\b/
 
 export const answer = (
   question: string,
@@ -737,39 +1391,120 @@ export const answer = (
   today: DateStr,
   fmt: Fmt,
   memory: ChatMemory = {},
+  prefs: AssistantPrefs = {},
 ): { reply: Reply; memory: ChatMemory } => {
-  const q = fold(question)
-    .replace(/[¿?¡!.,;:]/g, ' ')
+  let q = fold(question)
+    .replace(/[¿?¡!.,;:"“”()]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+  const userName = data.settings.userName?.trim().split(/\s+/)[0] ?? ''
+  const seed = hash(q) + (prefs.turn ?? 0) * 7
+  const L = (m: Moment) => line(m, prefs, userName, seed)
+  const done = (reply: Reply, mem: ChatMemory = memory) => ({ reply, memory: mem })
+
+  // Saludo: solo "hola" → presentación; "hola, ¿cuánto gasté?" → se responde la pregunta con saludo
+  const greetMatch = q.match(GREETING)
+  const greeted = !!greetMatch
+  if (greetMatch) q = q.slice(greetMatch[0].length).trim()
+  if (greeted && !q)
+    return done({
+      text: `${L('greet') || `¡Hola${userName ? ` ${userName}` : ''}! 👋`}\n\n${CAPABILITIES}`,
+      suggestions: STARTER_SUGGESTIONS,
+      kind: 'greet',
+    })
+
+  // Conversación (gracias, chistes, ¿quién eres?…)
+  const nWords = q.split(' ').length
+  for (const [m, re] of SMALLTALK) {
+    const anyLength = m === 'sad' || m === 'joke' || m === 'motivate' || m === 'areYouAI' || m === 'whoAreYou'
+    if (re.test(q) && (anyLength || nWords <= 6)) {
+      const text = L(m) || SMALLTALK_FALLBACK[m] || '😊'
+      return done({
+        text: greeted ? `${L('greet')}\n\n${text}` : text,
+        suggestions: SMALLTALK_SUGGESTIONS[m],
+        kind: `smalltalk:${m}`,
+      })
+    }
+  }
+
   const words = q.split(' ').filter(Boolean)
   const amount = findAmount(words)
   let intent = readIntent(q, !!amount)
   let period = readPeriod(q, today)
   let subject = readSubject(q, words, data)
-  const noSubject = !subject.category && !subject.place && !subject.accountId && !subject.person
+
+  // "¿Cómo agrego una tarjeta?", "¿qué es el CAE?": guía de la app o concepto
+  const howTo = HOW_TO.test(q) && !NOT_HOW_TO.test(q)
+  if (intent !== 'afford' && intent !== 'register' && intent !== 'savePlan') {
+    const k = findKnowledge(q)[0]
+    if (k && ((howTo && k.score >= 4) || (!intent && k.score >= 5) || k.score >= 12))
+      return done(wrapGreeting(knowledgeReply(k.entry)))
+  }
+
+  const noSubject =
+    !subject.category && !subject.place && !subject.accountId && !subject.person && !subject.subscription && !subject.goal
   // "¿y el mes pasado?", "¿y en transporte?": se completa con la pregunta anterior
-  const followUp = /^(y|e)\b/.test(q) || (!intent && (!!period || !noSubject))
+  const followUp = /^(y|e|ahora|y si)\b/.test(q) || (!intent && (!!period || !noSubject))
   if (!intent && followUp && memory.intent) {
     intent = memory.intent
     if (noSubject) subject = memory.subject ?? {}
     if (!period) period = memory.period
   }
+  if (!intent && subject.subscription) intent = 'subDetail'
+  if (!intent && subject.goal) intent = 'goals'
   if (!intent && !noSubject) intent = subject.person ? 'owedToMe' : 'spent'
   if (!intent && period) intent = 'spent'
-  period ??= readPeriod('este mes', today)!
+  if (subject.subscription && (intent === 'subs' || intent === 'spent' || intent === 'upcoming')) intent = 'subDetail'
+  // Contar y "última vez" sin período miran todo el historial
+  period ??= intent === 'count' ? readPeriod('en total', today)! : readPeriod('este mes', today)!
   const mem: ChatMemory = { intent, subject, period }
+
+  function wrapGreeting(r: Reply): Reply {
+    return greeted ? { ...r, text: `${L('greet')}\n\n${r.text}` } : r
+  }
+
   const reply = ((): Reply => {
     switch (intent) {
       case 'help':
-        return helpReply(data.settings.userName)
+        return {
+          text: `${L('whoAreYou') || 'Soy tu asistente de finanzas.'}\n\n${CAPABILITIES}`,
+          suggestions: STARTER_SUGGESTIONS,
+          kind: 'help',
+        }
       case 'register':
         return {
           text: 'Perfecto, revisa que esté bien y lo guardo:',
           actions: [{ label: '✍️ Revisar y anotar', kind: 'sheet', sheet: { kind: 'quick', text: question } }],
+          kind: 'register',
         }
+      case 'afford': {
+        const what = q
+          .replace(/^.*?(alcanza para|comprar(me)?|compro|darme el gusto de)\s*/, '')
+          .replace(/\s*(de|por|que cuesta|que vale|que sale)?\s*\$?\s*[\d.]+.*$/, '')
+          .replace(/\b(un|una|unos|unas|el|la|los|las)\b\s*/, '')
+          .trim()
+        return affordReply(data, today, fmt, amount?.value, what && what.split(' ').length <= 4 ? `para ${what}` : '')
+      }
+      case 'savePlan':
+        return savePlanReply(data, fmt, q, amount?.value, subject.goal)
+      case 'count':
+        return countReply(data, subject, period, fmt)
+      case 'lastTime':
+        return lastTimeReply(data, subject, today, fmt)
+      case 'saved':
+        return savedReply(data, period, fmt)
+      case 'weekday':
+        return weekdayReply(data, today, fmt)
+      case 'ants':
+        return antsReply(data, today, fmt)
+      case 'installments':
+        return installmentsReply(data, today, fmt)
+      case 'subDetail':
+        return subject.subscription ? subDetailReply(data, subject.subscription, today, fmt) : subsReply(data, today, fmt)
+      case 'monthlyAvg':
+        return monthlyAvgReply(data, subject, today, fmt)
       case 'balance':
-        return balanceReply(data, fmt)
+        return subject.accountId ? accountReply(data, subject.accountId, today, fmt) : balanceReply(data, fmt)
       case 'owedToMe':
         return loansReply(data, today, fmt, 'lent', subject.person)
       case 'iOwe':
@@ -777,11 +1512,25 @@ export const answer = (
       case 'subs':
         return subsReply(data, today, fmt)
       case 'card':
-        return cardReply(data, today, fmt)
+        return subject.accountId ? accountReply(data, subject.accountId, today, fmt) : cardReply(data, today, fmt)
       case 'budget':
         return budgetReply(data, today, fmt)
-      case 'goals':
-        return goalsReply(data, fmt)
+      case 'goals': {
+        const g = subject.goal
+        if (!g) return goalsReply(data, fmt)
+        const saved = goalSaved(g)
+        const left = Math.max(0, g.target - saved)
+        const monthly = goalMonthlyNeeded(g, today)
+        return {
+          text:
+            left === 0
+              ? `¡Ya completaste tu meta **${g.icon} ${g.name}**! 🎉`
+              : `Para **${g.icon} ${g.name}** llevas ${fmt(saved)} de ${fmt(g.target)}: te faltan **${fmt(left)}**${monthly ? `, o sea unos ${fmt(Math.ceil(monthly))} al mes para llegar al ${fmtDate(g.deadline!)}` : ''}.`,
+          mood: left === 0 ? 'good' : 'neutral',
+          kind: 'goals',
+          actions: left ? [{ label: 'Abonar a la meta', kind: 'sheet', sheet: { kind: 'contribution', id: g.id } }] : undefined,
+        }
+      }
       case 'upcoming':
         return upcomingReply(data, today, fmt)
       case 'status':
@@ -798,7 +1547,9 @@ export const answer = (
         return spentReply(data, subject, period, fmt, 'income')
       case 'last': {
         const txs = sortTx(data.transactions.filter((t) => matchTx(t, subject))).slice(0, 6)
-        return txs.length ? { text: 'Estos son tus últimos movimientos:', txs } : { text: 'Aún no tienes movimientos.' }
+        return txs.length
+          ? { text: 'Estos son tus últimos movimientos:', txs, kind: 'last' }
+          : { text: 'Aún no tienes movimientos.', kind: 'last' }
       }
       case 'tips': {
         const tips = generateInsights(data, today, fmt).slice(0, 4)
@@ -806,17 +1557,39 @@ export const answer = (
           ? {
               text: 'Esto es lo que veo en tus números:',
               rows: tips.map((t) => ({ icon: t.emoji, label: t.title, sub: t.body, value: '' })),
+              kind: 'tips',
             }
-          : { text: 'Necesito unas semanas más de movimientos para darte buenos consejos. ¡Sigue anotando! 💪' }
+          : { text: 'Necesito unas semanas más de movimientos para darte buenos consejos. ¡Sigue anotando! 💪', kind: 'tips' }
       }
       case 'spent':
         return spentReply(data, subject, period, fmt)
-      default:
+      default: {
+        // Último intento: algo de la guía con menos seguridad
+        const k = findKnowledge(q)[0]
+        if (k && k.score >= 3) return knowledgeReply(k.entry)
         return {
-          text: 'Mmm, no te entendí bien 🤔. Prueba preguntando de otra forma, por ejemplo:',
+          text: OFF_TOPIC.test(q)
+            ? 'De eso no sé mucho 😅: lo mío son tus finanzas y la app. Pregúntame, por ejemplo:'
+            : L('notUnderstood') || SMALLTALK_FALLBACK.notUnderstood!,
           suggestions: STARTER_SUGGESTIONS.slice(0, 4),
+          kind: 'unknown',
         }
+      }
     }
   })()
-  return { reply, memory: intent ? mem : memory }
+
+  // Personalidad: reacción antes de la respuesta y, a veces, un remate
+  let text = reply.text
+  const react =
+    reply.react ?? (reply.mood === 'good' && seed % 3 !== 2 ? 'good' : reply.mood === 'bad' && seed % 4 !== 3 ? 'bad' : undefined)
+  if (react && !reply.kind?.startsWith('knowledge')) {
+    const pre = L(react)
+    if (pre) text = `${pre} ${text}`
+  }
+  if (!reply.suggestions?.length && reply.kind !== 'unknown' && seed % 3 === 0) {
+    const closer = L('closer')
+    if (closer) text = `${text}\n\n${closer}`
+  }
+  if (greeted) text = `${L('greet')}\n\n${text}`
+  return { reply: { ...reply, text, kind: reply.kind ?? intent }, memory: intent ? mem : memory }
 }

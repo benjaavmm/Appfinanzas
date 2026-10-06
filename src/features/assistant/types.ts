@@ -1,6 +1,7 @@
 /** Tipos compartidos del asistente */
 import type { SheetState } from '../../lib/ui'
 import type { Transaction } from '../../lib/types'
+import type { Moment } from './personality'
 
 export type Fmt = (n: number, opts?: { sign?: boolean }) => string
 
@@ -24,9 +25,12 @@ export interface Reply {
   mood?: Mood
   /** Qué entendió (para pruebas y para recordar el tema) */
   kind?: string
+  /** Reacción de la personalidad que va antes del texto (p. ej. veredicto de "¿me alcanza?") */
+  react?: Moment
+  /** Pasos numerados (guías de la app) */
+  steps?: string[]
   rows?: ReplyRow[]
   txs?: Transaction[]
   actions?: ReplyAction[]
   suggestions?: string[]
 }
-

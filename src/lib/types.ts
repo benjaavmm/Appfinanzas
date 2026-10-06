@@ -172,6 +172,8 @@ export interface Settings {
   reminders?: ReminderSettings
   /** RUT de comercio → nombre que el usuario le dio (aprendido al escanear boletas) */
   merchantNames?: Record<string, string>
+  /** Asistente: nombre y personalidad */
+  assistant?: { name?: string; personality?: string }
 }
 
 export interface FinanceData {

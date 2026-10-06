@@ -32,7 +32,7 @@ describe('readIntent', () => {
     ['¿cuánto gasté en comida?', 'spent'],
     ['¿cuál fue mi gasto más grande?', 'biggest'],
     ['¿cuánto me pagaron este mes?', 'income'],
-    ['hola', 'help'],
+    ['¿qué puedes hacer?', 'help'],
   ]
   for (const [text, intent] of cases) it(text, () => expect(readIntent(q(text), false)).toBe(intent))
   it('registrar: "gasté 5 lucas en uber"', () => expect(readIntent(q('gasté 5 lucas en uber'), true)).toBe('register'))
@@ -93,7 +93,83 @@ describe('answer (datos de ejemplo)', () => {
   })
   it('si no entiende, lo dice y sugiere preguntas', () => {
     const { reply } = ask('xyzzy plugh')
-    expect(reply.text).toContain('no te entendí')
+    expect(reply.kind).toBe('unknown')
+    expect(reply.text.length).toBeGreaterThan(5)
     expect(reply.suggestions?.length).toBeGreaterThan(0)
+  })
+})
+
+describe('preguntas nuevas', () => {
+  it('¿me alcanza?: con monto da un veredicto; sin monto lo pide', () => {
+    const r = ask('¿me alcanza para unas zapatillas de 60 lucas?').reply
+    expect(r.kind).toBe('afford')
+    expect(['affordYes', 'affordTight', 'affordNo']).toContain(r.react)
+    expect(r.rows?.some((x) => x.label === 'Te quedaría')).toBe(true)
+    expect(ask('¿me alcanza para un viaje?').reply.text).toContain('¿De cuánto es?')
+  })
+  it('plan de ahorro: 50 lucas al mes por un año son 600 mil', () => {
+    const r = ask('si ahorro 50 lucas al mes cuánto tendré en un año').reply
+    expect(r.kind).toBe('savePlan')
+    expect(r.text).toContain(fmt(600000))
+  })
+  it('cuántas veces y la última vez', () => {
+    const place = data.transactions.find((t) => t.type === 'expense' && t.place === 'Uber')
+    if (place) {
+      const n = data.transactions.filter((t) => t.type === 'expense' && t.place === 'Uber').length
+      expect(ask('¿cuántas veces pedí uber?').reply.text).toContain(`${n} ${n === 1 ? 'vez' : 'veces'}`)
+      expect(ask('¿cuándo fue la última vez que pedí uber?').reply.kind).toBe('lastTime')
+    }
+  })
+  it('ahorro del mes = ingresos − gastos', () => {
+    const from = today.slice(0, 8) + '01'
+    const txs = inRange(data.transactions, from, today)
+    const net = txs.reduce((s, t) => s + (t.type === 'income' ? t.amount : t.type === 'expense' ? -t.amount : 0), 0)
+    const r = ask('¿cuánto ahorré este mes?').reply
+    expect(r.kind).toBe('saved')
+    expect(r.text).toContain(fmt(Math.abs(net)))
+  })
+  it('qué día gasto más, gastos hormiga y cuotas', () => {
+    expect(ask('¿qué día de la semana gasto más?').reply.kind).toBe('weekday')
+    expect(ask('mis gastos hormiga').reply.kind).toBe('ants')
+    expect(ask('¿cuánto pago en cuotas al mes?').reply.kind).toBe('installments')
+  })
+  it('una suscripción por su nombre', () => {
+    const sub = data.subscriptions[0]
+    expect(ask(`¿cuánto pago de ${sub.name}?`).reply.kind).toBe('subDetail')
+  })
+  it('el fin de semana', () => {
+    expect(readPeriod('el finde', '2026-10-07')).toMatchObject({ from: '2026-10-03', to: '2026-10-04' })
+    expect(readPeriod('este fin de semana', '2026-10-10')).toMatchObject({ from: '2026-10-10', to: '2026-10-10' })
+  })
+})
+
+describe('conversación y personalidad', () => {
+  it('saluda y se presenta', () => {
+    expect(ask('hola').reply.kind).toBe('greet')
+    const r = ask('hola, ¿cuánto gasté hoy?').reply
+    expect(r.kind).toBe('spent')
+  })
+  it('responde gracias, chistes y si es una IA', () => {
+    expect(ask('gracias!').reply.kind).toBe('smalltalk:thanks')
+    expect(ask('cuéntame un chiste').reply.kind).toBe('smalltalk:joke')
+    expect(ask('¿eres una IA?').reply.kind).toBe('smalltalk:areYouAI')
+    expect(ask('estoy sin plata').reply.kind).toBe('smalltalk:sad')
+  })
+  it('cada personalidad habla distinto', () => {
+    const greets = (['amigo', 'profesional', 'coach', 'chistoso'] as const).map(
+      (personality) => answer('hola', data, today, fmt, {}, { personality }).reply.text,
+    )
+    expect(new Set(greets).size).toBe(4)
+  })
+  it('las frases de todas las personalidades están completas y sin marcadores sueltos', async () => {
+    const { PERSONALITIES } = await import('../personality')
+    for (const p of Object.values(PERSONALITIES))
+      for (const [moment, lines] of Object.entries(p.lines)) {
+        expect(lines.length, `${p.id}.${moment}`).toBeGreaterThan(0)
+        for (const l of lines) expect(l, `${p.id}.${moment}`).not.toMatch(/\{(?!name\}|bot\})/)
+      }
+  })
+  it('no se le va a temas que no son de la app', () => {
+    expect(ask('¿qué tiempo hace mañana?').reply.text).toContain('finanzas')
   })
 })
