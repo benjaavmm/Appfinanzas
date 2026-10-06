@@ -173,3 +173,53 @@ describe('conversación y personalidad', () => {
     expect(ask('¿qué tiempo hace mañana?').reply.text).toContain('finanzas')
   })
 })
+
+describe('guía de la app y conceptos', () => {
+  const kind = (q: string) => ask(q).reply.kind ?? ''
+  it('explica cómo usar la app con pasos y botón', () => {
+    const r = ask('¿cómo escaneo una boleta?').reply
+    expect(r.kind).toMatch(/^knowledge:/)
+    expect(r.steps?.length).toBeGreaterThan(1)
+    expect(r.actions?.length).toBeGreaterThan(0)
+    expect(kind('como agrego mi tarjeta de credito')).toMatch(/^knowledge:/)
+    expect(kind('como agrego una suscripcion')).toMatch(/^knowledge:/)
+    expect(kind('olvidé mi contraseña')).toMatch(/^knowledge:/)
+  })
+  it('explica conceptos de finanzas', () => {
+    expect(kind('¿qué es el CAE?')).toBe('knowledge:cae')
+    expect(kind('¿conviene pagar el mínimo?')).toMatch(/^knowledge:/)
+    expect(kind('¿existe la deuda buena?')).toMatch(/^knowledge:/)
+  })
+  it('no confunde preguntas de datos ni frases parecidas', () => {
+    expect(kind('¿cuánto gasté en comida?')).toBe('spent')
+    expect(kind('¿cuánto pago en cuotas al mes?')).toBe('installments')
+    expect(kind('se me cae la app')).not.toBe('knowledge:cae')
+  })
+  it('todas las acciones de la guía son válidas', async () => {
+    const { APP_KNOWLEDGE, FINANCE_KNOWLEDGE } = await import('../knowledge')
+    const routes = [
+      '/',
+      '/movimientos',
+      '/analisis',
+      '/asistente',
+      '/prestamos',
+      '/suscripciones',
+      '/presupuestos',
+      '/metas',
+      '/cuentas',
+      '/categorias',
+      '/ajustes',
+      '/mas',
+      '/cuenta',
+      '/amigos',
+    ]
+    const ids = new Set<string>()
+    for (const e of [...APP_KNOWLEDGE, ...FINANCE_KNOWLEDGE]) {
+      expect(ids.has(e.id), `id repetido: ${e.id}`).toBe(false)
+      ids.add(e.id)
+      expect(e.triggers.length, e.id).toBeGreaterThan(0)
+      for (const t of e.triggers) expect(t, e.id).toBe(fold(t))
+      if (e.action?.kind === 'nav') expect(routes, e.id).toContain(e.action.to)
+    }
+  })
+})

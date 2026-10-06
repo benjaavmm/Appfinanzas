@@ -313,11 +313,10 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
       'puedo comprarme',
       'me puedo comprar',
       'podre comprar',
-      'conviene comprar',
-      'deberia comprar',
       'me compro',
       'puedo darme el gusto',
-    )
+    ) ||
+    (hasAmount && has(q, 'conviene comprar', 'deberia comprar'))
   )
     return 'afford'
   if (/\bsi (ahorro|ahorrara|junto|guardo|aparto)\b/.test(q)) return 'savePlan'
@@ -1257,6 +1256,8 @@ const scoreEntry = (q: string, stems: Set<string>, e: KnowledgeEntry) => {
   for (const t of e.triggers) {
     const tw = t.split(' ').filter((w) => w && !KSTOP.has(w))
     if (!tw.length) continue
+    // "se cae la app" no es el CAE
+    if (tw.includes('cae') && /\b(se|me|te|le|nos) cae\b/.test(q) && !/\b(se|me) cae\b/.test(t)) continue
     let score = 0
     if (new RegExp(`(^|\\s)${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`).test(q)) score = 3 + 3 * tw.length
     else if (tw.every((w) => (w.length <= 3 ? q.split(' ').includes(w) : stems.has(stem(w)))))
@@ -1279,6 +1280,20 @@ export const findKnowledge = (q: string, kind?: KnowledgeEntry['kind']): { entry
     .sort((a, b) => b.score - a.score)
 }
 
+/** "¿Qué es…?", "¿conviene…?": se prefiere el concepto antes que la guía de la app */
+const CONCEPT_Q =
+  /^(que es|que son|que significa|conviene|me conviene|que conviene|es bueno|es malo|es mejor|vale la pena|por que|cual es la diferencia|en que se diferencia|explicame)\b/
+
+const bestKnowledge = (q: string) => {
+  const ks = findKnowledge(q)
+  const top = ks[0]
+  if (top && CONCEPT_Q.test(q) && top.entry.kind === 'app') {
+    const concept = ks.find((x) => x.entry.kind === 'concept')
+    if (concept && concept.score >= top.score - 3) return concept
+  }
+  return top
+}
+
 const knowledgeReply = (e: KnowledgeEntry): Reply => ({
   text: e.answer,
   steps: e.steps,
@@ -1288,7 +1303,7 @@ const knowledgeReply = (e: KnowledgeEntry): Reply => ({
 })
 
 const HOW_TO =
-  /^(como|donde|se puede|puedo|para que sirve|para que es|que hace|me explicas|explicame|ensename|que es|que son|que significa|cual es la diferencia|en que se diferencia|hay forma|hay alguna forma|es posible|existe)\b|\b(como (se|hago|puedo|agrego|anoto|creo|pongo|uso|activo|desactivo|borro|elimino|cambio|edito|escaneo|importo|instalo|exporto|configuro|registro|ingreso|divido|comparto|veo|saco|subo|bajo|recupero|restauro|actualizo|oculto|bloqueo|cierro|inicio))\b/
+  /^(como|donde|se puede|puedo|para que sirve|para que es|que hace|me explicas|explicame|ensename|que es|que son|que significa|cual es la diferencia|en que se diferencia|hay forma|hay alguna forma|es posible|existe|conviene|me conviene|que conviene|es bueno|es malo|es mejor|vale la pena|por que)\b|\b(como (se|hago|puedo|agrego|anoto|creo|pongo|uso|activo|desactivo|borro|elimino|cambio|edito|escaneo|importo|instalo|exporto|configuro|registro|ingreso|divido|comparto|veo|saco|subo|bajo|recupero|restauro|actualizo|oculto|bloqueo|cierro|inicio))\b/
 const NOT_HOW_TO = /^(como (voy|vamos|estoy|me va|ando|va|cierro|termino|cerrare))\b/
 
 /* ───────────── Conversación ───────────── */
@@ -1318,7 +1333,7 @@ const SMALLTALK: [Moment, RegExp][] = [
   ],
   [
     'compliment',
-    /\b(eres (bacan|genial|sec[oa]|la raja|util|lo maximo|el mejor|la mejor|inteligente|buenisim[oa]|crack)|buena respuesta|te pasaste|que buen[oa] eres|me encanta(s)?|excelente respuesta|buena luka|buena)\b$/,
+    /\b(eres (bacan|genial|sec[oa]|la raja|util|lo maximo|el mejor|la mejor|inteligente|buenisim[oa]|crack)|buena respuesta|te pasaste|que buen[oa] eres|me encanta(s)?|excelente respuesta|buena luka)\b$|^(buena|buenisim[oa]|bacan|genial|excelente|crack|la raja|seco|grande)$/,
   ],
   ['laugh', /^(ja){2,}|^(je){2,}|^(jsjs|jajs|xd|lol|jaj)/],
 ]
@@ -1440,7 +1455,7 @@ export const answer = (
   // "¿Cómo agrego una tarjeta?", "¿qué es el CAE?": guía de la app o concepto
   const howTo = HOW_TO.test(q) && !NOT_HOW_TO.test(q)
   if (intent !== 'afford' && intent !== 'register' && intent !== 'savePlan') {
-    const k = findKnowledge(q)[0]
+    const k = bestKnowledge(q)
     if (k && ((howTo && k.score >= 4) || (!intent && k.score >= 5) || k.score >= 12))
       return done(wrapGreeting(knowledgeReply(k.entry)))
   }
@@ -1569,7 +1584,7 @@ export const answer = (
         return spentReply(data, subject, period, fmt)
       default: {
         // Último intento: algo de la guía con menos seguridad
-        const k = findKnowledge(q)[0]
+        const k = bestKnowledge(q)
         if (k && k.score >= 3) return knowledgeReply(k.entry)
         return {
           text: OFF_TOPIC.test(q)

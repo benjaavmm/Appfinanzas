@@ -20,6 +20,7 @@ import { fmtDate, toDateStr } from '../lib/dates'
 import { useData } from '../lib/hooks'
 import { forceUpdate, isIOS, promptInstall, usePwa } from '../lib/pwa'
 import { useStore } from '../lib/store'
+import { useAuth } from '../lib/cloud/auth'
 import { ask, openSheet, toast } from '../lib/ui'
 import { RemindersCard } from '../features/reminders/RemindersCard'
 import type { ThemePref } from '../lib/types'
@@ -41,6 +42,7 @@ export default function Settings() {
   const data = useData()
   const { settings } = data
   const update = useStore((s) => s.updateSettings)
+  const signedIn = useAuth((s) => s.status === 'signedIn')
   const importData = useStore((s) => s.importData)
   const resetAll = useStore((s) => s.resetAll)
   const installEvent = usePwa((s) => s.installEvent)
@@ -179,8 +181,9 @@ export default function Settings() {
         <Card>
           <h2 className="mb-1 font-bold">Tus datos</h2>
           <p className="mb-3 text-xs text-muted">
-            Todo se guarda solo en este dispositivo (nada se sube a internet). Descarga un respaldo de vez en cuando, sobre todo
-            antes de cambiar de teléfono.
+            {signedIn
+              ? 'Tus datos se guardan en este dispositivo y se respaldan en tu cuenta. Igual puedes descargar un respaldo en un archivo.'
+              : 'Todo se guarda solo en este dispositivo (nada se sube a internet). Descarga un respaldo de vez en cuando, sobre todo antes de cambiar de teléfono.'}
           </p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Button
