@@ -104,7 +104,7 @@ describe('preguntas nuevas', () => {
     const r = ask('¿me alcanza para unas zapatillas de 60 lucas?').reply
     expect(r.kind).toBe('afford')
     expect(['affordYes', 'affordTight', 'affordNo']).toContain(r.react)
-    expect(r.rows?.some((x) => x.label === 'Te quedaría')).toBe(true)
+    expect(r.rows?.some((x) => x.label === 'A fin de mes, con la compra')).toBe(true)
     expect(ask('¿me alcanza para un viaje?').reply.text).toContain('¿De cuánto es?')
   })
   it('plan de ahorro: 50 lucas al mes por un año son 600 mil', () => {
@@ -309,5 +309,38 @@ describe('resumen para la IA', () => {
     expect(needsAi('¿por qué gasto tanto en delivery?', 'spent')).toBe(true)
     expect(needsAi('xyz', 'unknown')).toBe(true)
     expect(needsAi('¿cuánto gasté en comida?', 'spent')).toBe(false)
+  })
+})
+
+describe('¿puedo comprar…? (análisis completo)', () => {
+  it('cuadra las cuentas: fin de mes = plata + sueldo que falta − comprometido − día a día', async () => {
+    const { analyzePurchase } = await import('../afford')
+    const a = analyzePurchase(data, today, 60000)
+    expect(a.endOfMonth).toBe(Math.round(a.liquid + a.incomeLeft - a.committed.total - a.variableLeft))
+    expect(a.afterCash).toBe(a.endOfMonth - 60000)
+  })
+  it('el veredicto cambia con el monto', async () => {
+    const { analyzePurchase } = await import('../afford')
+    expect(analyzePurchase(data, today, 3000).verdict).toBe('yes')
+    expect(['wait', 'no']).toContain(analyzePurchase(data, today, 8_000_000).verdict)
+  })
+  it('sigue la conversación: "¿y en 6 cuotas?" usa el mismo monto', () => {
+    const first = ask('¿puedo comprarme unas zapatillas de 60 lucas?')
+    const second = ask('¿y en 6 cuotas?', first.memory)
+    expect(second.reply.kind).toBe('afford')
+    expect(second.reply.text).toContain('6 cuotas')
+    expect(second.reply.text).toContain(fmt(10000))
+  })
+  it('entiende "puedo gastar X en…" y "que vale X"', () => {
+    expect(ask('puedo gastar 50 lucas en salir este finde?').reply.kind).toBe('afford')
+    expect(ask('puedo comprar esto que vale 80 mil?').reply.kind).toBe('afford')
+  })
+  it('compras chicas: respuesta corta', () => {
+    const r = ask('me alcanza para un completo de 3 lucas').reply
+    expect(r.text).toContain('menos de lo que gastas en un día')
+  })
+  it('explica el cálculo con "¿por qué?"', () => {
+    const first = ask('¿me alcanza para un celular de 900 mil?')
+    expect(ask('¿por qué?', first.memory).reply.text).toContain('Así lo calculé')
   })
 })

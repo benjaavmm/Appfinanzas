@@ -42,6 +42,7 @@ import { keywordCategory } from '../quick/keywords'
 
 export type { Fmt, Reply, ReplyAction, ReplyRow } from './types'
 import type { Fmt, Reply, ReplyRow } from './types'
+import { affordReply, readInstallments } from './afford'
 import { APP_KNOWLEDGE, FINANCE_KNOWLEDGE, type KnowledgeEntry } from './knowledge'
 import { DEFAULT_BOT_NAME, DEFAULT_PERSONALITY, PERSONALITIES, type Moment, type PersonalityId } from './personality'
 
@@ -52,6 +53,8 @@ export interface ChatMemory {
   period?: Period
   /** Explicación de la última respuesta ("¿por qué?") */
   why?: string
+  /** Última compra analizada, para "¿y en 6 cuotas?" */
+  afford?: { amount: number; what: string }
 }
 
 /** "¿Y por qué?", "¿cómo lo calculaste?", "explícame" */
@@ -369,7 +372,17 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
       'me puedo dar el gusto',
       'darme el gusto',
     ) ||
-    (hasAmount && has(q, 'conviene comprar', 'deberia comprar'))
+    (hasAmount &&
+      has(
+        q,
+        'conviene comprar',
+        'deberia comprar',
+        'puedo gastar',
+        'podria gastar',
+        'puedo pagar',
+        'me conviene gastar',
+        'puedo darme',
+      ))
   )
     return 'afford'
   if (/\bsi (ahorro|ahorrara|junto|guardo|aparto)\b/.test(q)) return 'savePlan'
@@ -539,6 +552,18 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
     return 'status'
   if (has(q, 'gast', 'pague', 'compre', 'se fue', 'consumi', 'cuanto me cobr', 'cuanto sale', 'cuanto cuesta')) return 'spent'
   return undefined
+}
+
+/** "¿puedo comprarme unas zapatillas de 60 lucas?" → "unas zapatillas" */
+export const extractItem = (q: string) => {
+  const m = q.match(/\b(?:alcanza para|comprarme|comprar|compro|darme el gusto de|dar el gusto de|gastarme|gastar|pagar)\s+(.+)$/)
+  if (!m) return ''
+  const item = m[1]
+    .replace(/\s*\b(que (vale|cuesta|sale)|de|por|en|a|con)\s*\$?\s*[\d.,]+.*$/, '')
+    .replace(/\s*\$?\s*[\d.,]+\s*(lucas?|mil|palos?|pesos|k)?\b.*$/, '')
+    .replace(/\s+(que (vale|cuesta|sale)|en \d+ cuotas).*$/, '')
+    .trim()
+  return item.split(' ').length <= 5 ? item : ''
 }
 
 /* ───────────── Respuestas ───────────── */
@@ -1026,91 +1051,6 @@ const biggestReply = (data: FinanceData, s: Subject, p: Period, fmt: Fmt): Reply
   return {
     text: `Tu gasto más grande ${p.label} fue **${fmt(top[0].amount)}**${top[0].place ? ` en ${top[0].place}` : ''} el ${fmtDate(top[0].date)}.`,
     txs: top,
-  }
-}
-
-const liquidAccounts = (data: FinanceData) =>
-  data.accounts.filter((a) => !a.archived && (a.type === 'cash' || a.type === 'debit' || a.type === 'other'))
-
-/** Lo que ya está comprometido de aquí a fin de mes: suscripciones, tarjeta y deudas que vencen */
-const committedUntilMonthEnd = (data: FinanceData, today: DateStr) => {
-  const end = monthEnd(parseDate(today))
-  const subs = upcomingCharges(
-    data.subscriptions.filter((x) => x.active && liquidAccounts(data).some((a) => a.id === x.accountId)),
-    end,
-  ).reduce((s, c) => s + c.sub.amount, 0)
-  const bal = accountBalances(data)
-  const cards = data.accounts
-    .filter((a) => a.type === 'credit' && !a.archived)
-    .reduce((s, c) => {
-      const cs = cardSummary(c, data.transactions, bal.get(c.id) ?? 0, today)
-      return s + (cs.dueDate <= end ? cs.toPay : 0)
-    }, 0)
-  const debts = data.loans
-    .filter((l) => l.direction === 'borrowed' && l.dueDate && l.dueDate <= end)
-    .reduce((s, l) => s + loanRemaining(l), 0)
-  return { subs, cards, debts, total: subs + cards + debts }
-}
-
-const affordReply = (data: FinanceData, today: DateStr, fmt: Fmt, amount: number | undefined, what: string): Reply => {
-  if (!amount)
-    return {
-      text: '¿De cuánto es? Dime algo como **"¿me alcanza para unas zapatillas de 60 lucas?"** y lo calculo con tus cuentas.',
-      kind: 'afford',
-    }
-  const bal = accountBalances(data)
-  const liquid = liquidAccounts(data).reduce((s, a) => s + Math.max(0, bal.get(a.id) ?? 0), 0)
-  const committed = committedUntilMonthEnd(data, today)
-  const free = liquid - committed.total
-  const after = free - amount
-  const st = monthStats(data, today)
-  const budget = data.settings.monthlyBudget
-  const budgetLeft = budget ? budget - st.spent : undefined
-  const daysLeft = Math.max(1, st.totalDays - st.dayOfMonth + 1)
-  const thing = what ? ` ${what}` : ''
-  let react: Moment
-  let text: string
-  if (after >= 0 && amount <= free * 0.35 && (budgetLeft === undefined || amount <= budgetLeft)) {
-    react = 'affordYes'
-    text = `Sí te alcanza${thing}: después de pagar lo que ya tienes comprometido este mes te quedarían **${fmt(after)}**.`
-  } else if (after >= 0) {
-    react = 'affordTight'
-    text = `Te alcanza${thing}, pero **justo**: te quedarían ${fmt(after)} para lo que queda del mes (${fmt(Math.floor(after / daysLeft))} por día).`
-    if (budgetLeft !== undefined && amount > budgetLeft)
-      text += ` Además te pasarías de tu presupuesto por ${fmt(amount - Math.max(0, budgetLeft))}.`
-  } else {
-    react = 'affordNo'
-    text = `Con lo que tienes ahora **no te alcanza**${thing}: te faltarían **${fmt(-after)}** después de tus pagos del mes.`
-  }
-  const rows: ReplyRow[] = [
-    { icon: '💵', label: 'Plata en tus cuentas', value: fmt(liquid) },
-    { icon: '📌', label: 'Pagos que vienen este mes', value: fmt(-committed.total), tone: 'muted' },
-    { icon: '🛍️', label: `La compra${thing}`, value: fmt(-amount), tone: 'muted' },
-    { icon: after >= 0 ? '✅' : '⚠️', label: 'Te quedaría', value: fmt(after), tone: after >= 0 ? 'good' : 'bad' },
-  ]
-  if (budgetLeft !== undefined)
-    rows.push({
-      icon: '🎯',
-      label: 'Presupuesto que te queda',
-      value: fmt(budgetLeft),
-      tone: budgetLeft >= amount ? 'good' : 'bad',
-    })
-  const card = data.accounts.find((a) => a.type === 'credit' && !a.archived)
-  if (react !== 'affordYes' && card) {
-    const cs = cardSummary(card, data.transactions, bal.get(card.id) ?? 0, today)
-    if (cs.available !== undefined && cs.available >= amount)
-      text += ` Con la tarjeta tienes cupo (${fmt(cs.available)}); en **3 cuotas** serían ${fmt(Math.ceil(amount / 3))} al mes, pero recuerda que es deuda.`
-  }
-  const goal = data.goals.find((g) => goalSaved(g) < g.target)
-  if (react !== 'affordYes' && goal) text += ` Ojo, que también estás juntando para **${goal.icon} ${goal.name}**.`
-  const why = `Sumo la plata de tus cuentas de efectivo y débito (${fmt(liquid)}) y le resto lo que ya está comprometido hasta fin de mes: suscripciones ${fmt(committed.subs)}, pago de tarjeta ${fmt(committed.cards)} y deudas que vencen ${fmt(committed.debts)}. Lo que queda (${fmt(free)}) es lo libre; si la compra se come más de un tercio, te digo que queda justo.`
-  return {
-    text,
-    rows,
-    react,
-    why,
-    kind: 'afford',
-    mood: react === 'affordNo' ? 'bad' : react === 'affordYes' ? 'good' : 'neutral',
   }
 }
 
@@ -1610,8 +1550,23 @@ export const answer = (
   }
 
   const words = q.split(' ').filter(Boolean)
-  const amount = findAmount(words)
+  // "en 6 cuotas" no es un monto
+  const amount = findAmount(
+    q
+      .replace(/\d{1,2}\s*cuotas?/g, ' ')
+      .split(' ')
+      .filter(Boolean),
+  )
   let intent = readIntent(q, !!amount)
+  if (
+    memory.intent === 'afford' &&
+    memory.afford &&
+    !amount &&
+    /^(y |e |y si |pero )?(en |con |a )?(\d{1,2} )?(cuotas?|la tarjeta|tarjeta|credito|si espero|esperando|al contado|contado)\b/.test(
+      q,
+    )
+  )
+    intent = 'afford'
   let period = readPeriod(q, today)
   let subject = readSubject(q, words, data)
 
@@ -1671,12 +1626,9 @@ export const answer = (
           kind: 'register',
         }
       case 'afford': {
-        const what = q
-          .replace(/^.*?(alcanza para|comprar(me)?|compro|darme el gusto de)\s*/, '')
-          .replace(/\s*(de|por|que cuesta|que vale|que sale)?\s*\$?\s*[\d.]+.*$/, '')
-          .replace(/\b(un|una|unos|unas|el|la|los|las)\b\s*/, '')
-          .trim()
-        return affordReply(data, today, fmt, amount?.value, what && what.split(' ').length <= 4 ? `para ${what}` : '')
+        if (!amount && memory.afford)
+          return affordReply(data, today, fmt, memory.afford.amount, memory.afford.what, { installments: readInstallments(q) })
+        return affordReply(data, today, fmt, amount?.value, extractItem(q), { installments: readInstallments(q) })
       }
       case 'savePlan':
         return savePlanReply(data, fmt, q, amount?.value, subject.goal)
@@ -1793,6 +1745,12 @@ export const answer = (
   if (greeted) text = `${L('greet')}\n\n${text}`
   return {
     reply: { ...reply, text, kind: reply.kind ?? intent },
-    memory: intent ? { ...mem, why: reply.why } : { ...memory, why: reply.why },
+    memory: intent
+      ? {
+          ...mem,
+          why: reply.why,
+          afford: intent === 'afford' ? (amount ? { amount: amount.value, what: extractItem(q) } : memory.afford) : undefined,
+        }
+      : { ...memory, why: reply.why },
   }
 }

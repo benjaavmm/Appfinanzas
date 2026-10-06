@@ -32,7 +32,7 @@ describe.skipIf(!file)('sonda del asistente', () => {
           JSON.stringify({
             q,
             kind: res.reply.kind,
-            text: res.reply.text.replace(/\n+/g, ' ').slice(0, 220),
+            text: res.reply.text.replace(/\n+/g, ' ').slice(0, 1500),
             rows: res.reply.rows?.length ?? 0,
             rowsText: res.reply.rows?.map((r) => `${r.label}: ${r.value}`).join(' | '),
             steps: res.reply.steps?.length ?? 0,
