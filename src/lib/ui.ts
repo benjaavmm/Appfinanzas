@@ -37,6 +37,8 @@ export type SheetState =
   | { kind: 'quick'; text?: string; voice?: boolean }
   /** Dividir una cuenta entre varias personas */
   | { kind: 'split' }
+  /** Detalle de una tarjeta de crédito */
+  | { kind: 'card'; id: ID }
 
 interface UIState {
   toasts: Toast[]

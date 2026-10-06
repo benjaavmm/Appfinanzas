@@ -1,10 +1,39 @@
 import { ArrowLeftRight, Plus } from 'lucide-react'
 import { ACCOUNT_TYPES } from '../lib/defaults'
 import { debtTotals } from '../lib/finance'
-import { useBalances, useData, useMoney } from '../lib/hooks'
+import { useBalances, useData, useMoney, useToday } from '../lib/hooks'
+import { cardSummary } from '../lib/credit'
+import { fmtDate } from '../lib/dates'
+import { currencyDecimals } from '../lib/format'
+import type { Account } from '../lib/types'
 import { openSheet } from '../lib/ui'
-import { Button, Card, cx, IconBadge, PageHeader, Stat } from '../components/ui'
+import { Button, Card, cx, IconBadge, meterColor, PageHeader, ProgressBar, Stat } from '../components/ui'
 import { useNavigate } from 'react-router'
+
+const CardMini = ({ account, balance }: { account: Account; balance: number }) => {
+  const { transactions, settings } = useData()
+  const fmt = useMoney()
+  const today = useToday()
+  const s = cardSummary(account, transactions, balance, today, currencyDecimals(settings.currency))
+  const ratio = s.limit ? s.used / s.limit : 0
+  return (
+    <div className="mt-3 space-y-1.5">
+      {s.limit ? (
+        <>
+          <ProgressBar ratio={ratio} color={meterColor(ratio)} height={6} />
+          <p className="text-xs text-muted">
+            Cupo disponible <b className="text-ink">{fmt(s.available ?? 0)}</b> de {fmt(s.limit)}
+          </p>
+        </>
+      ) : null}
+      {s.toPay > 0 && (
+        <p className={cx('text-xs font-semibold', s.dueDate < today ? 'text-bad' : 'text-brand')}>
+          A pagar {fmt(s.toPay)} · vence el {fmtDate(s.dueDate, 'd MMM')}
+        </p>
+      )}
+    </div>
+  )
+}
 
 export default function Accounts() {
   const { accounts, loans } = useData()
@@ -52,7 +81,10 @@ export default function Accounts() {
           const type = ACCOUNT_TYPES.find((t) => t.value === a.type)
           return (
             <div key={a.id}>
-              <Card onClick={() => openSheet({ kind: 'account', id: a.id })} className="relative overflow-hidden">
+              <Card
+                onClick={() => openSheet(a.type === 'credit' ? { kind: 'card', id: a.id } : { kind: 'account', id: a.id })}
+                className="relative overflow-hidden"
+              >
                 <div className="absolute top-0 right-0 h-full w-1.5" style={{ background: a.color }} />
                 <div className="flex items-center gap-3">
                   <IconBadge icon={a.icon} color={a.color} size="lg" />
@@ -62,6 +94,7 @@ export default function Accounts() {
                   </div>
                   <p className={cx('text-xl font-extrabold', b < 0 && 'text-bad')}>{fmt(b)}</p>
                 </div>
+                {a.type === 'credit' && <CardMini account={a} balance={b} />}
                 <div className="mt-3 flex gap-2">
                   <Button
                     size="sm"

@@ -38,6 +38,9 @@ export const buildDemoData = (userName = ''): FinanceData => {
       initialBalance: 0,
       color: '#9085e9',
       icon: '🧾',
+      creditLimit: 900000,
+      statementDay: 20,
+      paymentDay: 5,
       createdAt: iso,
     },
   ]
@@ -112,7 +115,7 @@ export const buildDemoData = (userName = ''): FinanceData => {
     if (dom === 5)
       add({
         type: 'transfer',
-        amount: 120000,
+        amount: 330000,
         accountId: 'a-corriente',
         toAccountId: 'a-credito',
         date: d,
@@ -295,6 +298,19 @@ export const buildDemoData = (userName = ''): FinanceData => {
     time: '16:40',
     place: 'Falabella',
     note: 'Zapatillas nuevas',
+    installments: 3,
+  })
+  // Compra en cuotas de hace unos meses
+  add({
+    type: 'expense',
+    amount: 359990,
+    accountId: 'a-credito',
+    categoryId: 'c-compras',
+    date: addDaysStr(today, -70),
+    time: '12:10',
+    place: 'Paris',
+    note: 'Celular nuevo',
+    installments: 12,
   })
 
   // Suscripciones (con su historial)

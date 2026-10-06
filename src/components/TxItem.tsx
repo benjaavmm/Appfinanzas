@@ -16,6 +16,7 @@ export const TxItem = ({ tx, showDate }: { tx: Transaction; showDate?: boolean }
     isTransfer ? 'Transferencia' : tx.place ? cat?.name : undefined,
     !isTransfer ? acc?.name : undefined,
     showDate ? tx.date.split('-').reverse().slice(0, 2).join('/') : tx.time,
+    tx.installments && tx.installments > 1 ? `${tx.installments} cuotas` : undefined,
   ]
     .filter(Boolean)
     .join(' · ')

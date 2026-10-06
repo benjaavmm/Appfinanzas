@@ -7,7 +7,7 @@ import { useBalances, useMoney, vibrate } from '../../lib/hooks'
 import { useStore } from '../../lib/store'
 import { ask, toast, type SheetState } from '../../lib/ui'
 import type { AccountType, CategoryKind } from '../../lib/types'
-import { Button, Chip, Field, Input, Segmented } from '../ui'
+import { Button, Chip, Field, Input, Segmented, Select } from '../ui'
 import { AmountInput, ColorPicker, EmojiPicker } from '../ui/pickers'
 import { Sheet } from '../ui/Sheet'
 
@@ -29,8 +29,18 @@ export const AccountForm = ({ open, onClose, state }: Base & { state: Extract<Sh
   const [balance, setBalance] = useState(existing ? String(Math.abs(currentBalance)) : '')
   const [negative, setNegative] = useState(existing ? currentBalance < 0 : false)
   const isCredit = type === 'credit'
+  const [limit, setLimit] = useState(existing?.creditLimit ? String(existing.creditLimit) : '')
+  const [statementDay, setStatementDay] = useState(existing?.statementDay ? String(existing.statementDay) : '')
+  const [paymentDay, setPaymentDay] = useState(existing?.paymentDay ? String(existing.paymentDay) : '')
 
   const save = () => {
+    const credit = isCredit
+      ? {
+          creditLimit: Number(limit) > 0 ? Number(limit) : undefined,
+          statementDay: statementDay ? Number(statementDay) : undefined,
+          paymentDay: paymentDay ? Number(paymentDay) : undefined,
+        }
+      : { creditLimit: undefined, statementDay: undefined, paymentDay: undefined }
     // En tarjetas de crédito el monto ingresado es deuda: saldo negativo
     const signed = (Number(balance) || 0) * (isCredit || negative ? -1 : 1)
     vibrate(12)
@@ -41,10 +51,11 @@ export const AccountForm = ({ open, onClose, state }: Base & { state: Extract<Sh
         icon,
         color,
         initialBalance: existing.initialBalance + (signed - currentBalance),
+        ...credit,
       })
       toast({ message: 'Cuenta actualizada' })
     } else {
-      store.addAccount({ name: name.trim(), type, icon, color, initialBalance: signed })
+      store.addAccount({ name: name.trim(), type, icon, color, initialBalance: signed, ...credit })
       toast({ message: `${icon} ${name.trim()} creada` })
     }
     onClose()
@@ -133,11 +144,40 @@ export const AccountForm = ({ open, onClose, state }: Base & { state: Extract<Sh
           />
           {isCredit ? (
             <p className="mt-2 text-center text-xs text-muted">Los gastos con tarjeta aumentan la deuda; los pagos la reducen.</p>
-          ) : (
+          ) : null}
+          {!isCredit && (
             <div className="mt-2 flex justify-center">
               <Chip active={negative} onClick={() => setNegative((n) => !n)}>
                 {negative ? 'Saldo negativo (sobregiro)' : '¿Saldo negativo?'}
               </Chip>
+            </div>
+          )}
+          {isCredit && (
+            <div className="mt-4 space-y-4">
+              <AmountInput value={limit} onChange={setLimit} label="Cupo total de la tarjeta" />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Día de facturación" hint="Cuándo cierra el estado de cuenta">
+                  <Select value={statementDay} onChange={(e) => setStatementDay(e.target.value)}>
+                    <option value="">Fin de mes</option>
+                    {Array.from({ length: 31 }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>
+                        Día {i + 1}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Día de pago" hint="Hasta cuándo puedes pagar">
+                  <Select value={paymentDay} onChange={(e) => setPaymentDay(e.target.value)}>
+                    <option value="">No sé</option>
+                    {Array.from({ length: 31 }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>
+                        Día {i + 1}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+              <p className="text-xs text-muted">Los encuentras en tu estado de cuenta o en la app de tu banco.</p>
             </div>
           )}
           {existing && (

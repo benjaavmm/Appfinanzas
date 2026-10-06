@@ -6,15 +6,16 @@
  * mostró y no repite el mismo aviso.
  */
 import { addDaysStr, daysBetween, fmtDate, monthKey } from '../../lib/dates'
-import { byCategory, inMonth, loanRemaining, sumType } from '../../lib/finance'
-import { formatMoney } from '../../lib/format'
+import { cardSummary } from '../../lib/credit'
+import { accountBalances, byCategory, inMonth, loanRemaining, sumType } from '../../lib/finance'
+import { currencyDecimals, formatMoney } from '../../lib/format'
 import { upcomingCharges } from '../../lib/recurring'
 import type { DateStr, FinanceData, Loan, ReminderSettings, Subscription } from '../../lib/types'
 
 export interface Reminder {
   /** Estable por ocurrencia (p. ej. `sub:<id>:<fecha>`), para no avisar dos veces lo mismo */
   id: string
-  kind: 'subscription' | 'loan' | 'budget'
+  kind: 'subscription' | 'loan' | 'budget' | 'card'
   title: string
   body: string
   /** Ruta de la app a abrir al tocar la notificación, p. ej. "#/suscripciones" */
@@ -79,11 +80,48 @@ export const computeReminders = (data: FinanceData, today: DateStr): Reminder[] 
   if (prefs.subscriptions) out.push(...subscriptionReminders(data, today, prefs.daysBefore, money))
   if (prefs.loans) out.push(...loanReminders(data.loans ?? [], today, money))
   if (prefs.budgets) out.push(...budgetReminders(data, today, money))
+  if (prefs.cards !== false) out.push(...cardReminders(data, today, prefs.daysBefore, money))
 
   return out
     .sort((a, b) => a.rank - b.rank || a.days - b.days || b.weight - a.weight || a.id.localeCompare(b.id))
     .slice(0, MAX_REMINDERS)
     .map(({ id, kind, title, body, url }) => ({ id, kind, title, body, url }))
+}
+
+/* ───────────────────────── Tarjetas de crédito ───────────────────────── */
+
+/** Estado de cuenta por pagar: aviso desde unos días antes del vencimiento (mínimo 3) y si se atrasa */
+const cardReminders = (data: FinanceData, today: DateStr, daysBefore: number, money: (n: number) => string): Candidate[] => {
+  const out: Candidate[] = []
+  const balances = accountBalances(data)
+  for (const card of data.accounts ?? []) {
+    if (card.type !== 'credit' || card.archived) continue
+    const s = cardSummary(
+      card,
+      data.transactions ?? [],
+      balances.get(card.id) ?? 0,
+      today,
+      currencyDecimals(data.settings?.currency ?? 'CLP'),
+    )
+    if (s.toPay <= 0) continue
+    const days = daysBetween(today, s.dueDate)
+    if (days > Math.max(3, daysBefore)) continue
+    const when = days === 0 ? 'hoy' : days === 1 ? 'mañana' : days > 1 ? `en ${days} días` : agoText(-days)
+    out.push({
+      id: `card:${card.id}:${s.dueDate}${days < 0 ? `:atraso:${Math.floor(-days / 7)}` : ''}`,
+      kind: 'card',
+      title: days < 0 ? `Pago atrasado: ${card.name}` : `Paga tu ${card.name} ${when}`,
+      body:
+        days < 0
+          ? `Venció ${when}. Faltan ${money(s.toPay)} del estado de cuenta.`
+          : `Monto a pagar: ${money(s.toPay)}. Hazlo en la app de tu banco y regístralo con "Pagar tarjeta".`,
+      url: '#/cuentas',
+      rank: days < 0 ? 1 : days === 0 ? 0 : 3,
+      days: Math.abs(days),
+      weight: s.toPay,
+    })
+  }
+  return out
 }
 
 /* ───────────────────────── Suscripciones ───────────────────────── */

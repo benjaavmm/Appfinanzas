@@ -9,6 +9,7 @@ import { ReceiptViewer } from '../../features/receipts/ReceiptViewer'
 import { ImportSheet } from '../../features/import/ImportSheet'
 import { QuickAddSheet } from '../../features/quick/QuickAddSheet'
 import { SplitSheet } from '../../features/split/SplitSheet'
+import { CardSheet } from '../../features/cards/CardSheet'
 
 /** Renderiza la hoja activa y la mantiene montada durante la animación de cierre */
 export const SheetHost = () => {
@@ -51,5 +52,7 @@ export const SheetHost = () => {
       return <QuickAddSheet key={key} {...props} text={s.text} voice={s.voice} />
     case 'split':
       return <SplitSheet key={key} {...props} />
+    case 'card':
+      return <CardSheet key={key} {...props} id={s.id} />
   }
 }

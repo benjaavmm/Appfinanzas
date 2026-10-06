@@ -3,8 +3,9 @@ import { useMemo, useState } from 'react'
 import { ArrowDown, Camera, Sparkles, Trash } from 'lucide-react'
 import { addDaysStr, todayStr } from '../../lib/dates'
 import { COLORS } from '../../lib/defaults'
+import { installmentAmounts } from '../../lib/credit'
 import { byCategory, inMonth } from '../../lib/finance'
-import { normalizeText } from '../../lib/format'
+import { currencyDecimals, normalizeText } from '../../lib/format'
 import { useMoney, vibrate } from '../../lib/hooks'
 import { learnPlace, placeSuggestions, quickPicks } from '../../lib/insights'
 import { useStore } from '../../lib/store'
@@ -37,6 +38,7 @@ export const TransactionForm = ({ open, onClose, state }: Props) => {
   const [time, setTime] = useState(init.time ?? '')
   const [place, setPlace] = useState(init.place ?? '')
   const [note, setNote] = useState(init.note ?? '')
+  const [installments, setInstallments] = useState(init.installments && init.installments > 1 ? init.installments : 1)
   const [placeFocus, setPlaceFocus] = useState(false)
   const [touchedCategory, setTouchedCategory] = useState(!!init.categoryId)
   const [learned, setLearned] = useState<string | null>(null)
@@ -80,6 +82,8 @@ export const TransactionForm = ({ open, onClose, state }: Props) => {
   const value = Number(amount) || 0
   const canSave = value > 0 && !!accountId && (type !== 'transfer' || (!!toAccountId && toAccountId !== accountId))
 
+  const isCreditPurchase = type === 'expense' && store.accounts.find((a) => a.id === accountId)?.type === 'credit'
+
   const save = () => {
     if (!canSave) return
     const fallbackCat = store.categories.find((c) => c.id === (type === 'income' ? 'i-otros' : 'c-otros'))?.id
@@ -95,6 +99,7 @@ export const TransactionForm = ({ open, onClose, state }: Props) => {
       note: note.trim() || undefined,
       subscriptionId: existing?.subscriptionId,
       receiptId,
+      installments: isCreditPurchase && installments > 1 ? installments : undefined,
     }
     vibrate(12)
     if (existing) {
@@ -361,6 +366,25 @@ export const TransactionForm = ({ open, onClose, state }: Props) => {
               <Field label={type === 'income' ? 'Entra a' : 'Pagaste con'}>
                 <AccountChips accounts={store.accounts} value={accountId} onChange={setAccountId} />
               </Field>
+
+              {isCreditPurchase && (
+                <Field
+                  label="Cuotas"
+                  hint={
+                    installments > 1 && value > 0
+                      ? `${installments} cuotas de ${fmt(installmentAmounts(value, installments, currencyDecimals(store.settings.currency))[0], { force: true })} · se cobran en tus próximos ${installments} estados de cuenta`
+                      : 'Sin cuotas: se cobra completo en el próximo estado de cuenta'
+                  }
+                >
+                  <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5">
+                    {[1, 2, 3, 6, 10, 12, 18, 24, 36].map((n) => (
+                      <Chip key={n} active={installments === n} onClick={() => setInstallments(n)}>
+                        {n === 1 ? 'Sin cuotas' : `${n} cuotas`}
+                      </Chip>
+                    ))}
+                  </div>
+                </Field>
+              )}
             </>
           )}
 

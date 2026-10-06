@@ -2,7 +2,19 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useNavigate } from 'react-router'
-import { Bell, ChevronRight, CircleAlert, CircleCheck, HandCoins, Info, PiggyBank, Repeat, Send, Smartphone } from 'lucide-react'
+import {
+  Bell,
+  ChevronRight,
+  CircleAlert,
+  CreditCard,
+  CircleCheck,
+  HandCoins,
+  Info,
+  PiggyBank,
+  Repeat,
+  Send,
+  Smartphone,
+} from 'lucide-react'
 import { useData, useToday, vibrate } from '../../lib/hooks'
 import { useStore } from '../../lib/store'
 import { toast } from '../../lib/ui'
@@ -71,6 +83,7 @@ const KIND_ICON: Record<Reminder['kind'], { icon: ReactNode; cls: string }> = {
   subscription: { icon: <Repeat className="size-4" />, cls: 'bg-brand-soft text-brand' },
   loan: { icon: <HandCoins className="size-4" />, cls: 'bg-warn-soft text-warn' },
   budget: { icon: <PiggyBank className="size-4" />, cls: 'bg-bad-soft text-bad' },
+  card: { icon: <CreditCard className="size-4" />, cls: 'bg-info-soft text-info' },
 }
 
 export const RemindersCard = () => {
@@ -197,6 +210,9 @@ export const RemindersCard = () => {
               </Row>
               <Row title="Préstamos" text="Cuando vencen o están atrasados">
                 <Toggle checked={prefs.loans} onChange={(v) => save({ loans: v })} label="Avisar préstamos" />
+              </Row>
+              <Row title="Pago de tarjetas" text="Antes del vencimiento del estado de cuenta">
+                <Toggle checked={prefs.cards !== false} onChange={(v) => save({ cards: v })} label="Avisar pago de tarjetas" />
               </Row>
               <Row title="Presupuestos" text="Al llegar al 80 % y al 100 % del mes">
                 <Toggle checked={prefs.budgets} onChange={(v) => save({ budgets: v })} label="Avisar presupuestos" />

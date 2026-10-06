@@ -14,6 +14,12 @@ export interface Account {
   color: string
   icon: string
   archived?: boolean
+  /** Tarjetas de crédito: cupo total */
+  creditLimit?: number
+  /** Tarjetas de crédito: día del mes en que se factura (cierre del estado de cuenta) */
+  statementDay?: number
+  /** Tarjetas de crédito: día del mes en que vence el pago */
+  paymentDay?: number
   createdAt: string
 }
 
@@ -46,6 +52,8 @@ export interface Transaction {
   place?: string
   note?: string
   subscriptionId?: ID
+  /** Compras con tarjeta de crédito: número de cuotas (sin definir o 1 = sin cuotas) */
+  installments?: number
   /** Foto de la boleta guardada en el dispositivo (ver src/lib/files.ts) */
   receiptId?: ID
   /** Movimiento creado al dividir una cuenta (agrupa el gasto propio y los préstamos) */
@@ -130,6 +138,8 @@ export interface ReminderSettings {
   loans: boolean
   /** Presupuestos que superan el 80 % / 100 % */
   budgets: boolean
+  /** Pago de tarjetas de crédito (estado de cuenta por pagar) */
+  cards?: boolean
   /** Días de anticipación para cobros (0 = el mismo día) */
   daysBefore: number
 }
