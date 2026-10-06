@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router'
 import {
   ChartPie,
+  CircleUser,
+  Users,
   Ellipsis,
   HandCoins,
   House,
@@ -18,6 +20,8 @@ import {
 import { vibrate } from '../../lib/hooks'
 import { openSheet } from '../../lib/ui'
 import { useStore } from '../../lib/store'
+import { cloudConfigured } from '../../lib/cloud/client'
+import { useAuth } from '../../lib/cloud/auth'
 import { cx } from '../ui'
 
 export const NAV = [
@@ -30,6 +34,12 @@ export const NAV = [
   { to: '/metas', label: 'Metas de ahorro', icon: PiggyBank },
   { to: '/cuentas', label: 'Cuentas', icon: Landmark },
   { to: '/categorias', label: 'Categorías', icon: Tags },
+  ...(cloudConfigured
+    ? [
+        { to: '/amigos', label: 'Amigos', icon: Users },
+        { to: '/cuenta', label: 'Mi cuenta', icon: CircleUser },
+      ]
+    : []),
   { to: '/ajustes', label: 'Ajustes', icon: Settings },
 ]
 
@@ -41,7 +51,18 @@ const MOBILE = [
   { to: '/mas', label: 'Más', icon: Ellipsis },
 ]
 
-const MORE_ROUTES = ['/mas', '/prestamos', '/suscripciones', '/presupuestos', '/metas', '/cuentas', '/categorias', '/ajustes']
+const MORE_ROUTES = [
+  '/mas',
+  '/prestamos',
+  '/suscripciones',
+  '/presupuestos',
+  '/metas',
+  '/cuentas',
+  '/categorias',
+  '/ajustes',
+  '/amigos',
+  '/cuenta',
+]
 
 const addTx = () => {
   vibrate(10)
@@ -51,6 +72,7 @@ const addTx = () => {
 export const AppShell = ({ children }: { children: ReactNode }) => {
   const { pathname } = useLocation()
   const name = useStore((s) => s.settings.userName)
+  const signedIn = useAuth((s) => s.status === 'signedIn')
   return (
     <div className="min-h-dvh lg:flex">
       {/* Barra lateral (escritorio) */}
@@ -91,7 +113,9 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
             </NavLink>
           ))}
         </nav>
-        <p className="px-3 pt-4 text-[11px] text-muted">Tus datos se guardan solo en este dispositivo.</p>
+        <p className="px-3 pt-4 text-[11px] text-muted">
+          {signedIn ? '☁️ Respaldado en tu cuenta.' : 'Tus datos se guardan solo en este dispositivo.'}
+        </p>
       </aside>
 
       <main className="min-w-0 flex-1">

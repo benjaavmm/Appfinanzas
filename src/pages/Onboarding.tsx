@@ -1,6 +1,10 @@
 import { motion } from 'motion/react'
-import { useState } from 'react'
-import { ArrowLeft, Check, Plus } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowLeft, Check, CloudCheck, LogIn, Plus } from 'lucide-react'
+import { cloudConfigured } from '../lib/cloud/client'
+import { useAuth, whenSignedIn } from '../lib/cloud/auth'
+import { syncNow } from '../lib/cloud/sync'
+import { AuthForm } from '../features/account/AuthForm'
 import { buildDemoData } from '../lib/demo'
 import { COLORS } from '../lib/defaults'
 import { CURRENCIES, currencyDecimals, formatAmountInput, formatMoney, sanitizeAmountInput } from '../lib/format'
@@ -40,6 +44,23 @@ export default function Onboarding() {
   const [name, setName] = useState('')
   const [currency, setCurrency] = useState('CLP')
   const [drafts, setDrafts] = useState<Draft[]>(initialDrafts)
+  const [login, setLogin] = useState(false)
+  const profile = useAuth((s) => s.profile)
+
+  // Con sesión iniciada, el nombre viene de la cuenta
+  useEffect(() => {
+    if (profile?.display_name) setName((n) => n || profile.display_name)
+  }, [profile])
+
+  /** Tras entrar: si la cuenta tiene datos se cargan solos; si no, seguimos configurando */
+  const afterSignIn = async () => {
+    await whenSignedIn()
+    await syncNow()
+    if (!useStore.getState().settings.onboarded) {
+      setLogin(false)
+      setStep(1)
+    }
+  }
   const cur = CURRENCIES.find((c) => c.code === currency)!
   const decimals = currencyDecimals(currency)
 
@@ -71,7 +92,22 @@ export default function Onboarding() {
     <div className="pt-safe pb-safe relative min-h-dvh overflow-hidden bg-bg">
       <div className="pointer-events-none absolute -top-40 left-1/2 h-96 w-[140%] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(102,85,245,0.35),transparent)] blur-2xl" />
       <div className="relative mx-auto flex min-h-dvh max-w-md flex-col px-6 py-8">
-        {step > 0 && (
+        {login && (
+          <div className="flex flex-1 flex-col">
+            <button
+              aria-label="Volver"
+              onClick={() => setLogin(false)}
+              className="mb-6 flex size-10 items-center justify-center rounded-full bg-surface-2"
+            >
+              <ArrowLeft className="size-5" />
+            </button>
+            <h2 className="text-3xl font-extrabold tracking-tight">Tu cuenta</h2>
+            <p className="mt-1 mb-6 text-ink-2">Entra o crea una cuenta. Si ya tienes datos guardados, los traemos al tiro.</p>
+            <AuthForm onSignedIn={() => void afterSignIn()} />
+          </div>
+        )}
+
+        {!login && step > 0 && (
           <div className="mb-6 flex items-center gap-3">
             <button
               aria-label="Volver"
@@ -91,7 +127,7 @@ export default function Onboarding() {
           </div>
         )}
 
-        {step === 0 && (
+        {!login && step === 0 && (
           <div key="s0" className="flex flex-1 flex-col">
             <motion.img
               src={`${import.meta.env.BASE_URL}favicon.svg`}
@@ -125,10 +161,21 @@ export default function Onboarding() {
               <Button block size="lg" onClick={() => setStep(1)}>
                 Empezar
               </Button>
+              {cloudConfigured && !profile && (
+                <Button block variant="secondary" icon={<LogIn className="size-5" />} onClick={() => setLogin(true)}>
+                  Ya tengo cuenta · Iniciar sesión
+                </Button>
+              )}
               <Button block variant="ghost" onClick={demo}>
                 Explorar con datos de ejemplo
               </Button>
-              <p className="pt-2 text-center text-[11px] text-muted">🔒 Tus datos se guardan solo en este dispositivo.</p>
+              {profile ? (
+                <p className="flex items-center justify-center gap-1.5 pt-2 text-center text-xs font-semibold text-good">
+                  <CloudCheck className="size-4" /> Conectado como @{profile.username}: todo se respaldará en tu cuenta
+                </p>
+              ) : (
+                <p className="pt-2 text-center text-[11px] text-muted">🔒 Tus datos se guardan solo en este dispositivo.</p>
+              )}
             </div>
           </div>
         )}

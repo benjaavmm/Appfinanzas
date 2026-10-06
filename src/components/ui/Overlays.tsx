@@ -73,7 +73,7 @@ export const ConfirmDialog = () => {
             {req.message && <p className="mt-2 text-sm text-ink-2">{req.message}</p>}
             <div className="mt-6 flex gap-2">
               <Button variant="secondary" block onClick={() => close(false)}>
-                Cancelar
+                {req.cancelLabel ?? 'Cancelar'}
               </Button>
               <Button
                 variant={req.danger ? 'danger' : 'primary'}

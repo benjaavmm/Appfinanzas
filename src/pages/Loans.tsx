@@ -36,6 +36,13 @@ const LoanRow = ({ loan, today }: { loan: Loan; today: string }) => {
             : loan.dueDate
               ? ` · ${status === 'overdue' ? 'venció' : 'vence'} ${fmtInDays(loan.dueDate)}`
               : ''}
+          {loan.shared?.status === 'payment_reported'
+            ? loan.direction === 'lent'
+              ? ' · dice que te pagó'
+              : ' · esperando confirmación'
+            : loan.shared
+              ? ' · 🔗 en su app'
+              : ''}
         </span>
       </span>
       <span className="shrink-0 text-right">

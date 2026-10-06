@@ -64,6 +64,18 @@ export interface Transaction {
 /** lent = yo presté (me deben) · borrowed = me prestaron (yo debo) */
 export type LoanDirection = 'lent' | 'borrowed'
 
+export type SharedLoanStatus = 'active' | 'payment_reported' | 'paid' | 'rejected' | 'cancelled'
+
+/** Préstamo compartido con un amigo que también usa la app (fila en Supabase) */
+export interface SharedLoanLink {
+  id: string
+  friendId: string
+  username: string
+  role: 'lender' | 'borrower'
+  status: SharedLoanStatus
+  createdByMe: boolean
+}
+
 export interface LoanPayment {
   id: ID
   amount: number
@@ -85,6 +97,8 @@ export interface Loan {
   payments: LoanPayment[]
   /** Préstamo creado al dividir una cuenta */
   splitId?: ID
+  /** Si es un préstamo compartido con un amigo de la app */
+  shared?: SharedLoanLink
   createdAt: string
 }
 

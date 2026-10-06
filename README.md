@@ -52,6 +52,26 @@ Queda con su ícono, se abre a pantalla completa y se actualiza sola cuando hay 
 
 Para probar todo sin escribir datos, en la pantalla de bienvenida toca **"Explorar con datos de ejemplo"** (o en Ajustes → Cargar datos de ejemplo).
 
+## Cuenta, respaldo en la nube y amigos (Supabase, opcional)
+
+Con una cuenta puedes iniciar sesión, tener tus datos en varios dispositivos y **compartir préstamos con amigos**. Por ejemplo, si Benjamín anota que le prestó $10.000 a Karim, a Karim le aparece "Le debes $10.000 a Benjamín" con recordatorio en la fecha de pago y un botón **"Ya le pagué"**, y Benjamín lo confirma. Supabase tiene un plan gratis que alcanza de sobra para uso personal.
+
+Sin estos pasos la app funciona igual que siempre, solo en el dispositivo.
+
+1. Crea un proyecto gratis en **https://supabase.com** (elige la región São Paulo, que es la más cercana).
+2. En **SQL Editor → New query**, pega todo el archivo [`supabase/schema.sql`](supabase/schema.sql) y toca **Run**. Crea las tablas y las reglas de seguridad; se puede volver a correr sin problema.
+3. En **Authentication → URL Configuration**:
+   - **Site URL:** `https://benjaavmm.github.io/Appfinanzas/`
+   - **Redirect URLs:** agrega `https://benjaavmm.github.io/Appfinanzas/**`
+4. En **Project Settings → API**, copia la **Project URL** y la clave **anon public**. Esa clave se puede publicar: la protección la dan las reglas del paso 2.
+5. En GitHub, en el repo, ve a **Settings → Secrets and variables → Actions → pestaña Variables → New repository variable** y crea:
+   - `SUPABASE_URL` = la Project URL
+   - `SUPABASE_ANON_KEY` = la clave anon public
+   - (opcional) `SUPABASE_GOOGLE` = `1`, si activaste Google en **Authentication → Providers**
+6. En **Actions**, abre el último "Deploy" y elige **Re-run all jobs**, o sube cualquier cambio. Al terminar, en la app aparecen **Más → Mi cuenta** y **Más → Amigos**.
+
+Qué se guarda en la nube: tus datos de la app, para el respaldo. No se guardan las fotos de boletas ni el PIN, que se quedan en el teléfono. Para los amigos solo se comparte tu nombre, tu @usuario y los préstamos entre ustedes. Nadie puede ver los datos de otra persona.
+
 ## Cómo está hecha
 
 - **React 19 + TypeScript + Vite**, estilos con **Tailwind CSS 4**, animaciones con **Motion**, gráficos con **Recharts**.

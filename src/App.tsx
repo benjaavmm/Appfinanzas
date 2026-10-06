@@ -6,6 +6,9 @@ import { useStore } from './lib/store'
 import { openSheet, toast } from './lib/ui'
 import { pruneReceipts, takeSharedFile } from './lib/files'
 import { checkRemindersNow } from './features/reminders/notify'
+import { initAuth } from './lib/cloud/auth'
+import { startSync } from './lib/cloud/sync'
+import { startSocial } from './lib/cloud/social'
 import { AppShell } from './components/layout/AppShell'
 import { SheetHost } from './components/forms/SheetHost'
 import { ConfirmDialog, Toaster } from './components/ui/Overlays'
@@ -22,6 +25,8 @@ import Settings from './pages/Settings'
 import More from './pages/More'
 import Onboarding from './pages/Onboarding'
 import LockScreen from './pages/LockScreen'
+import Account from './pages/Account'
+import Friends from './pages/Friends'
 
 const LOCK_AFTER_MS = 60_000
 
@@ -58,6 +63,8 @@ const AppRoutes = () => {
       <Route path="/categorias" element={<Categories />} />
       <Route path="/ajustes" element={<Settings />} />
       <Route path="/mas" element={<More />} />
+      <Route path="/cuenta" element={<Account />} />
+      <Route path="/amigos" element={<Friends />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
@@ -117,6 +124,14 @@ export default function App() {
   const pinHash = useStore((s) => s.settings.pinHash)
   const [unlocked, setUnlocked] = useState(false)
   const hiddenAt = useRef<number | null>(null)
+
+  // Cuenta en la nube: recién cuando los datos locales están cargados (si no, se pisarían)
+  useEffect(() => {
+    if (!hydrated) return
+    startSync()
+    startSocial()
+    void initAuth()
+  }, [hydrated])
 
   // Registra los cobros automáticos vencidos al abrir y al volver a la app
   useEffect(() => {

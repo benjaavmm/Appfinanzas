@@ -5,10 +5,12 @@ import { useData, useMoney } from '../lib/hooks'
 import { monthlyEquivalent } from '../lib/recurring'
 import { NAV } from '../components/layout/AppShell'
 import { PageHeader } from '../components/ui'
+import { useAuth } from '../lib/cloud/auth'
 
 export default function More() {
   const { loans, subscriptions, goals, accounts, categories } = useData()
   const fmt = useMoney()
+  const auth = useAuth()
   const { owedToMe } = debtTotals(loans)
   const details: Record<string, string> = {
     '/prestamos': owedToMe > 0 ? `Te deben ${fmt(owedToMe)}` : 'Quién te debe',
@@ -17,6 +19,8 @@ export default function More() {
     '/metas': goals.length ? `${fmt(goalsSavedTotal(goals))} apartados` : 'Ahorra con objetivos',
     '/cuentas': `${accounts.filter((a) => !a.archived).length} cuentas`,
     '/categorias': `${categories.length} categorías`,
+    '/amigos': 'Préstamos compartidos',
+    '/cuenta': auth.profile ? `@${auth.profile.username} · respaldado` : 'Inicia sesión y respalda',
     '/ajustes': 'Tema, moneda, respaldo, PIN',
   }
   const colors: Record<string, string> = {
@@ -26,6 +30,8 @@ export default function More() {
     '/metas': '#e87ba4',
     '/cuentas': '#9085e9',
     '/categorias': '#eda100',
+    '/amigos': '#0ea5b7',
+    '/cuenta': '#6655f5',
     '/ajustes': '#8a8f98',
   }
   const items = NAV.filter((n) => details[n.to])

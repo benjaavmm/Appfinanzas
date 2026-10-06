@@ -12,13 +12,15 @@ export interface ConfirmRequest {
   title: string
   message?: string
   confirmLabel?: string
+  /** Texto del botón secundario (por defecto "Cancelar") */
+  cancelLabel?: string
   danger?: boolean
   resolve: (ok: boolean) => void
 }
 
 export type SheetState =
   | { kind: 'tx'; id?: ID; type?: TxType; initial?: Partial<Transaction> }
-  | { kind: 'loan'; id?: ID; direction?: LoanDirection; person?: string }
+  | { kind: 'loan'; id?: ID; direction?: LoanDirection; person?: string; friendId?: string }
   | { kind: 'loanDetail'; id: ID }
   | { kind: 'loanPayment'; id: ID }
   | { kind: 'sub'; id?: ID }
