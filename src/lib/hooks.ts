@@ -54,7 +54,10 @@ export const useHydrated = () => {
   const [hydrated, setHydrated] = useState(() => useStore.persist.hasHydrated())
   useEffect(() => {
     if (hydrated) return
-    return useStore.persist.onFinishHydration(() => setHydrated(true))
+    const unsub = useStore.persist.onFinishHydration(() => setHydrated(true))
+    // Si terminó de cargar entre el primer render y este efecto, el aviso ya pasó
+    if (useStore.persist.hasHydrated()) setHydrated(true)
+    return unsub
   }, [hydrated])
   return hydrated
 }

@@ -1,8 +1,9 @@
 import { motion, MotionConfig } from 'motion/react'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { useApplyTheme, useHydrated } from './lib/hooks'
-import { useStore } from './lib/store'
+import { useBoot, useStore } from './lib/store'
+import { forceUpdate } from './lib/pwa'
 import { openSheet, toast } from './lib/ui'
 import { pruneReceipts, takeSharedFile } from './lib/files'
 import { checkRemindersNow } from './features/reminders/notify'
@@ -138,17 +139,83 @@ const LaunchActions = () => {
   return null
 }
 
-const Splash = () => (
-  <div className="flex min-h-dvh items-center justify-center bg-bg">
-    <motion.img
-      src={`${import.meta.env.BASE_URL}favicon.svg`}
-      alt=""
-      className="size-16 rounded-[22px]"
-      animate={{ scale: [1, 1.08, 1] }}
-      transition={{ repeat: Infinity, duration: 1.2 }}
-    />
-  </div>
-)
+/** Si algo falla al abrir, se muestra qué pasó y cómo salir (en vez de quedarse cargando) */
+const BootProblem = ({ detail }: { detail?: string | null }) => {
+  const [busy, setBusy] = useState(false)
+  return (
+    <div className="pt-safe pb-safe flex min-h-dvh flex-col items-center justify-center bg-bg px-8 text-center">
+      <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="size-14 rounded-[20px]" />
+      <h1 className="mt-5 text-xl font-extrabold">La app está tardando en abrir</h1>
+      <p className="mt-2 max-w-xs text-sm text-ink-2">
+        Tus datos siguen guardados en este teléfono. Prueba estas opciones en orden:
+      </p>
+      <div className="mt-6 flex w-full max-w-xs flex-col gap-2">
+        <button
+          className="h-12 rounded-2xl bg-brand font-bold text-brand-ink"
+          onClick={() => {
+            useBoot.setState({ error: null })
+            void useStore.persist.rehydrate()
+          }}
+        >
+          Reintentar
+        </button>
+        <button className="h-12 rounded-2xl bg-surface-2 font-semibold" onClick={() => window.location.reload()}>
+          Recargar
+        </button>
+        <button
+          className="h-12 rounded-2xl bg-surface-2 font-semibold"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true)
+            void forceUpdate()
+          }}
+        >
+          {busy ? 'Reparando…' : 'Reparar y actualizar la app'}
+        </button>
+      </div>
+      <p className="mt-4 max-w-xs text-xs text-muted">
+        "Reparar" borra la copia guardada de la app (no tus datos) y la descarga de nuevo. Si nada funciona, cierra la app por
+        completo y ábrela otra vez.
+      </p>
+      {detail && <p className="mt-4 max-w-xs text-[11px] break-words text-muted">Detalle: {detail}</p>}
+    </div>
+  )
+}
+
+const BOOT_TIMEOUT_MS = 10_000
+
+const Splash = () => {
+  const error = useBoot((s) => s.error)
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    const t = window.setTimeout(() => setSlow(true), BOOT_TIMEOUT_MS)
+    return () => window.clearTimeout(t)
+  }, [])
+  if (error || slow) return <BootProblem detail={error} />
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-bg">
+      <motion.img
+        src={`${import.meta.env.BASE_URL}favicon.svg`}
+        alt=""
+        className="size-16 rounded-[22px]"
+        animate={{ scale: [1, 1.08, 1] }}
+        transition={{ repeat: Infinity, duration: 1.2 }}
+      />
+    </div>
+  )
+}
+
+/** Un error inesperado al dibujar una pantalla no deja la app en blanco */
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null }
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+  render() {
+    if (this.state.error) return <BootProblem detail={this.state.error.message} />
+    return this.props.children
+  }
+}
 
 export default function App() {
   const hydrated = useHydrated()
@@ -233,7 +300,7 @@ export default function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-      {content}
+      <ErrorBoundary>{content}</ErrorBoundary>
       <Toaster />
       <ConfirmDialog />
     </MotionConfig>

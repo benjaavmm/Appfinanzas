@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
-import { del, get, set } from 'idb-keyval'
+import { createStore as createKv, del, get, set, type UseStore } from 'idb-keyval'
 import { DATA_VERSION, emptyData } from './defaults'
 import { nowTime, parseDate, todayStr } from './dates'
 import { advanceDate, dueDates } from './recurring'
@@ -26,30 +26,93 @@ export const uid = (): string =>
 
 const nowIso = () => new Date().toISOString()
 
-/** IndexedDB (más espacio y más durable) con respaldo en localStorage */
-const storage: StateStorage = {
-  getItem: async (name) => {
+/**
+ * IndexedDB (más espacio y más durable) con respaldo en localStorage.
+ * Safari a veces deja "colgada" la apertura de IndexedDB (sobre todo al volver a la app o
+ * tras una actualización): por eso cada operación tiene un tiempo máximo y, si no responde,
+ * se abre una conexión nueva y se reintenta. Es la misma base de siempre ("keyval-store").
+ */
+const IDB_TIMEOUT_MS = 4000
+let kv: UseStore = createKv('keyval-store', 'keyval')
+const reopenKv = () => {
+  kv = createKv('keyval-store', 'keyval')
+}
+
+class IdbTimeout extends Error {}
+const withTimeout = <T>(p: Promise<T>, ms = IDB_TIMEOUT_MS) =>
+  new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new IdbTimeout('IndexedDB no respondió')), ms)
+    p.then(
+      (v) => {
+        clearTimeout(t)
+        resolve(v)
+      },
+      (e: unknown) => {
+        clearTimeout(t)
+        reject(e instanceof Error ? e : new Error(String(e)))
+      },
+    )
+  })
+
+const local = {
+  get: (name: string) => {
     try {
-      return (await get<string>(name)) ?? null
-    } catch {
       return localStorage.getItem(name)
+    } catch {
+      return null
     }
   },
-  setItem: async (name, value) => {
+  set: (name: string, value: string) => {
     try {
-      await set(name, value)
-    } catch {
       localStorage.setItem(name, value)
-    }
-  },
-  removeItem: async (name) => {
-    try {
-      await del(name)
     } catch {
-      localStorage.removeItem(name)
+      /* sin espacio */
     }
   },
 }
+
+const storage: StateStorage = {
+  getItem: async (name) => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return (await withTimeout(get<string>(name, kv))) ?? local.get(name)
+      } catch (e) {
+        // IndexedDB no disponible (p. ej. modo privado antiguo): se usa localStorage
+        if (!(e instanceof IdbTimeout)) return local.get(name)
+        reopenKv()
+      }
+    }
+    // No se pudo leer: es mejor avisar que arrancar vacío y pisar los datos guardados
+    throw new Error('El almacenamiento del teléfono no respondió')
+  },
+  setItem: async (name, value) => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await withTimeout(set(name, value, kv))
+        return
+      } catch (e) {
+        if (!(e instanceof IdbTimeout)) break
+        reopenKv()
+      }
+    }
+    local.set(name, value)
+  },
+  removeItem: async (name) => {
+    try {
+      await withTimeout(del(name, kv))
+    } catch {
+      /* nada */
+    }
+    try {
+      localStorage.removeItem(name)
+    } catch {
+      /* nada */
+    }
+  },
+}
+
+/** Error al cargar los datos guardados (para mostrarlo en vez de quedarse cargando) */
+export const useBoot = create<{ error: string | null }>()(() => ({ error: null }))
 
 type New<T> = Omit<T, 'id' | 'createdAt'>
 
@@ -299,6 +362,9 @@ export const useStore = create<Store>()(
       name: 'mis-finanzas',
       version: DATA_VERSION,
       storage: createJSONStorage(() => storage),
+      onRehydrateStorage: () => (_state, error) => {
+        useBoot.setState({ error: error ? (error instanceof Error ? error.message : String(error)) : null })
+      },
       partialize: (s): FinanceData => ({
         version: s.version,
         settings: s.settings,
