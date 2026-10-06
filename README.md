@@ -28,7 +28,7 @@ Está pensada primero para el **celular** (se instala como app y funciona sin in
 | 🐷 **Metas de ahorro** | Viaje, notebook, fondo de emergencia: progreso y cuánto apartar al mes para llegar a la fecha.                                                                                                                                                                      |
 | 📊 **Análisis**        | Comparación con el mes pasado a la misma altura, proyección de fin de mes, gasto por categoría, calendario de gastos, días de la semana en que más gastas, ranking de lugares, gastos hormiga y un puntaje de salud financiera (0–100) que explica cómo se calcula. |
 | ✨ **Asistente**       | Un chat donde preguntas "¿cómo voy este mes?", "¿cuánto gasté en comida en agosto?", "¿quién me debe?", "¿cuánto tengo que pagar de la tarjeta?" o "¿cuánto puedo gastar por día?", con texto o con la voz, y responde con tus datos. Entiende preguntas de seguimiento ("¿y el mes pasado?") y si le dices "gasté 5 lucas en uber" te ayuda a anotarlo. Funciona sin internet y no envía nada a ningún servidor. |
-| 🔒 **Privacidad**      | Tus datos se guardan **solo en tu dispositivo**. Modo "ocultar montos", bloqueo con PIN, respaldo/restauración en un archivo y exportación a Excel (CSV).                                                                                                           |
+| 🔒 **Privacidad**      | Tus datos se guardan **en tu dispositivo** (y en la nube solo si activas tu cuenta, ver más abajo). Modo "ocultar montos", bloqueo con PIN, respaldo/restauración en un archivo y exportación a Excel (CSV).                                                                                                           |
 | 🌗 **Diseño**          | Modo claro/oscuro automático, animaciones, hojas deslizables tipo app nativa, vibración al guardar (Android).                                                                                                                                                       |
 
 ## ¿Local o en la nube? ¿Cuánto cuesta?
@@ -72,6 +72,10 @@ Sin estos pasos la app funciona igual que siempre, solo en el dispositivo.
 6. En **Actions**, abre el último "Deploy" y elige **Re-run all jobs**, o sube cualquier cambio. Al terminar, en la app aparecen **Más → Mi cuenta** y **Más → Amigos**.
 
 Qué se guarda en la nube: tus datos de la app, para el respaldo. No se guardan las fotos de boletas ni el PIN, que se quedan en el teléfono. Para los amigos solo se comparte tu nombre, tu @usuario y los préstamos entre ustedes. Nadie puede ver los datos de otra persona.
+
+> 🔐 **Sobre la seguridad.** Los datos que se respaldan en la nube se guardan **sin cifrar** en tu proyecto de Supabase (solo tú y quien administre ese proyecto pueden leerlos). El PIN es un bloqueo de privacidad casual: protege de quien mire tu pantalla, pero **no cifra** los datos del dispositivo. Tras 5 intentos fallidos la app te hace esperar antes de probar otra vez.
+>
+> **Si ya tenías Supabase configurado, vuelve a pegar y ejecutar [`supabase/schema.sql`](supabase/schema.sql)** en el SQL Editor (es seguro repetirlo). La última versión impide que quien recibe una solicitud de amistad modifique quién la envió.
 
 ## Cómo está hecha
 

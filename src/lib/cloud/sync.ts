@@ -6,6 +6,8 @@
 import { create } from 'zustand'
 import { selectData, useStore } from '../store'
 import { ask } from '../ui'
+import { DATA_VERSION } from '../defaults'
+import { sanitizeData } from '../sanitize'
 import type { FinanceData } from '../types'
 import { cloudError, supabase } from './client'
 import { onUserChange, useAuth } from './auth'
@@ -49,28 +51,38 @@ let running: Promise<void> | null = null
 let again = false
 let timer = 0
 
-const push = async (userId: string) => {
+/** Otro dispositivo subió cambios mientras este sincronizaba: hay que volver a decidir */
+class SyncConflict extends Error {}
+
+/**
+ * Sube los datos solo si la nube sigue en la versión que acabamos de leer (`expectedAt`).
+ * Así, si dos dispositivos suben casi a la vez, el segundo no pisa al primero: reintenta.
+ */
+const push = async (userId: string, expectedAt: string | null) => {
   const sb = await supabase()
-  const { data, error } = await sb
-    .from('user_data')
-    .upsert({
-      user_id: userId,
-      data: snapshot(),
-      updated_at: new Date().toISOString(),
-      device: navigator.userAgent.slice(0, 120),
-    })
-    .select('updated_at')
-    .single()
-  if (error) throw error
-  writeMeta({ userId, syncedAt: data.updated_at as string, dirty: false })
-  return data.updated_at as string
+  const row = { data: snapshot(), updated_at: new Date().toISOString(), device: navigator.userAgent.slice(0, 120) }
+  const query = expectedAt
+    ? sb.from('user_data').update(row).eq('user_id', userId).eq('updated_at', expectedAt)
+    : sb.from('user_data').insert({ user_id: userId, ...row })
+  const { data, error } = await query.select('updated_at')
+  if (error) {
+    // 23505: otro dispositivo creó la fila primero
+    if (!expectedAt && (error as { code?: string }).code === '23505') throw new SyncConflict()
+    throw error
+  }
+  const saved = data?.[0]?.updated_at as string | undefined
+  if (!saved) throw new SyncConflict()
+  writeMeta({ userId, syncedAt: saved, dirty: false })
+  return saved
 }
 
 const apply = (userId: string, remote: { data: FinanceData; updated_at: string }) => {
   const pinHash = useStore.getState().settings.pinHash
+  // Lo que baja de la nube pasa por la misma limpieza que un respaldo: un dato dañado no rompe la app
+  const { data } = sanitizeData(remote.data as unknown as Record<string, unknown>, DATA_VERSION)
   applying = true
   try {
-    useStore.getState().importData({ ...remote.data, settings: { ...remote.data.settings, pinHash } })
+    useStore.getState().importData({ ...data, settings: { ...data.settings, pinHash } })
   } finally {
     applying = false
   }
@@ -78,7 +90,9 @@ const apply = (userId: string, remote: { data: FinanceData; updated_at: string }
   return remote.updated_at
 }
 
-const runSync = async (userId: string) => {
+const MAX_CONFLICT_RETRIES = 2
+
+const runSync = async (userId: string, retries = MAX_CONFLICT_RETRIES): Promise<void> => {
   const sb = await supabase()
   const { data: remote, error } = await sb.from('user_data').select('data, updated_at').eq('user_id', userId).maybeSingle()
   if (error) throw error
@@ -95,8 +109,16 @@ const runSync = async (userId: string) => {
     decision = useCloud ? 'pull' : 'push'
   }
   let at = meta?.syncedAt ?? null
-  if (decision === 'push') at = await push(userId)
-  else if (decision === 'pull' && remote) at = apply(userId, remote as { data: FinanceData; updated_at: string })
+  if (decision === 'push') {
+    try {
+      at = await push(userId, (remote as { updated_at: string } | null)?.updated_at ?? null)
+    } catch (e) {
+      if (!(e instanceof SyncConflict)) throw e
+      // Cambió en otro dispositivo: se vuelve a leer y decidir (pregunta si hay datos distintos)
+      if (retries > 0) return runSync(userId, retries - 1)
+      throw new Error('Tus datos cambiaron en otro dispositivo. Intenta sincronizar de nuevo.')
+    }
+  } else if (decision === 'pull' && remote) at = apply(userId, remote as { data: FinanceData; updated_at: string })
   else if (meta?.userId !== userId) writeMeta({ userId, syncedAt: remote?.updated_at ?? null, dirty: false })
   useSync.setState({ state: 'idle', lastSync: at, error: null })
 }
