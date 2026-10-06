@@ -152,6 +152,23 @@ export default function Dashboard() {
           {/* Registro rápido escribiendo o dictando */}
           <QuickAddBar />
 
+          {/* Asistente */}
+          <Link
+            to="/asistente"
+            className="-mt-2 flex items-center gap-3 rounded-[22px] bg-[linear-gradient(135deg,color-mix(in_srgb,#6655f5_14%,transparent),color-mix(in_srgb,#c2508f_14%,transparent))] px-4 py-3 transition active:scale-[0.99]"
+          >
+            <span className="text-xl" aria-hidden>
+              ✨
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold">Pregúntale a tu asistente</span>
+              <span className="block truncate text-xs text-muted">
+                “¿Cómo voy?”, “¿Cuánto gasté en comida?”, “¿Quién me debe?”
+              </span>
+            </span>
+            <span className="text-sm font-bold text-brand">→</span>
+          </Link>
+
           {/* Acciones rápidas */}
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
             {[

@@ -27,6 +27,7 @@ import Onboarding from './pages/Onboarding'
 import LockScreen from './pages/LockScreen'
 import Account from './pages/Account'
 import Friends from './pages/Friends'
+import Assistant from './pages/Assistant'
 
 const LOCK_AFTER_MS = 60_000
 
@@ -65,6 +66,7 @@ const AppRoutes = () => {
       <Route path="/mas" element={<More />} />
       <Route path="/cuenta" element={<Account />} />
       <Route path="/amigos" element={<Friends />} />
+      <Route path="/asistente" element={<Assistant />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
@@ -99,6 +101,9 @@ const LaunchActions = () => {
         break
       case 'importar':
         openSheet({ kind: 'import' })
+        break
+      case 'asistente':
+        navigate('/asistente', { replace: true })
         break
     }
   }, [search, pathname, navigate])

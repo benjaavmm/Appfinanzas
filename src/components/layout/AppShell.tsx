@@ -14,6 +14,7 @@ import {
   Plus,
   Repeat,
   Settings,
+  Sparkles,
   Tags,
   Target,
 } from 'lucide-react'
@@ -28,6 +29,7 @@ export const NAV = [
   { to: '/', label: 'Inicio', icon: House },
   { to: '/movimientos', label: 'Movimientos', icon: ListFilter },
   { to: '/analisis', label: 'Análisis', icon: ChartPie },
+  { to: '/asistente', label: 'Asistente', icon: Sparkles },
   { to: '/prestamos', label: 'Préstamos', icon: HandCoins },
   { to: '/suscripciones', label: 'Suscripciones', icon: Repeat },
   { to: '/presupuestos', label: 'Presupuestos', icon: Target },
@@ -53,6 +55,7 @@ const MOBILE = [
 
 const MORE_ROUTES = [
   '/mas',
+  '/asistente',
   '/prestamos',
   '/suscripciones',
   '/presupuestos',

@@ -13,6 +13,7 @@ export default function More() {
   const auth = useAuth()
   const { owedToMe } = debtTotals(loans)
   const details: Record<string, string> = {
+    '/asistente': 'Pregúntale a tus finanzas',
     '/prestamos': owedToMe > 0 ? `Te deben ${fmt(owedToMe)}` : 'Quién te debe',
     '/suscripciones': `${fmt(subscriptions.filter((s) => s.active).reduce((s, x) => s + monthlyEquivalent(x), 0))} al mes`,
     '/presupuestos': `${categories.filter((c) => c.budget).length} activos`,
@@ -24,6 +25,7 @@ export default function More() {
     '/ajustes': 'Tema, moneda, respaldo, PIN',
   }
   const colors: Record<string, string> = {
+    '/asistente': '#c2508f',
     '/prestamos': '#1baf7a',
     '/suscripciones': '#3987e5',
     '/presupuestos': '#eb6834',
