@@ -77,6 +77,20 @@ Qué se guarda en la nube: tus datos de la app, para el respaldo. No se guardan 
 >
 > **Si ya tenías Supabase configurado, vuelve a pegar y ejecutar [`supabase/schema.sql`](supabase/schema.sql)** en el SQL Editor (es seguro repetirlo). La última versión impide que quien recibe una solicitud de amistad modifique quién la envió.
 
+## Asistente con IA (Claude, opcional)
+
+El asistente del chat responde sin internet las preguntas que conoce. Si activas la IA, las preguntas difíciles, los "¿por qué?" y los consejos los responde **Claude** con tus datos. Se envía tu pregunta y un resumen de tus finanzas a tu Supabase, y de ahí a Anthropic. Necesitas tener la cuenta en la nube funcionando (sección anterior).
+
+1. **Clave de Anthropic:** en https://console.anthropic.com crea una cuenta. En **Billing** carga crédito (el mínimo alcanza para mucho) y en **API Keys** crea una clave (empieza con `sk-ant-`). Es secreta: no la pongas en GitHub.
+2. **Base de datos:** en Supabase → **SQL Editor**, vuelve a correr todo [`supabase/schema.sql`](supabase/schema.sql). Agrega el límite diario de preguntas.
+3. **Función:** en Supabase → **Edge Functions → Deploy a new function → Via Editor**. Nómbrala `asistente`, pega todo el archivo [`supabase/functions/asistente/index.ts`](supabase/functions/asistente/index.ts) y toca **Deploy**.
+4. **Secreto:** en **Edge Functions → Secrets**, agrega `ANTHROPIC_API_KEY` con tu clave.
+5. **En la app:** abre **Asistente**, toca la carita de arriba y en **Inteligencia artificial** elige **Cuando haga falta** o **Siempre**.
+
+Opcional, también en **Secrets**:
+- `ASSISTANT_MODEL`: modelo a usar. Por defecto es `claude-opus-5-5`. Para gastar menos puedes poner `claude-sonnet-5-5` o `claude-haiku-4-5`.
+- `ASSISTANT_DAILY_LIMIT`: preguntas por persona al día. Por defecto son 60.
+
 ## Cómo está hecha
 
 - **React 19 + TypeScript + Vite**, estilos con **Tailwind CSS 4**, animaciones con **Motion**, gráficos con **Recharts**.

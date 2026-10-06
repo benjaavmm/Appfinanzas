@@ -29,6 +29,10 @@ export interface Reply {
   react?: Moment
   /** Pasos numerados (guías de la app) */
   steps?: string[]
+  /** Cómo se calculó, para responder "¿por qué?" */
+  why?: string
+  /** La respondió la IA (Claude) en vez del asistente local */
+  ai?: boolean
   rows?: ReplyRow[]
   txs?: Transaction[]
   actions?: ReplyAction[]

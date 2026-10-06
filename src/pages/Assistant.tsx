@@ -1,15 +1,18 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { create } from 'zustand'
-import { ArrowUp, Check, Mic, RotateCcw, Smile } from 'lucide-react'
+import { ArrowUp, Check, Mic, RotateCcw, Smile, Sparkles } from 'lucide-react'
 import { useData, useMoney, useToday, vibrate } from '../lib/hooks'
 import { useStore } from '../lib/store'
 import { openSheet } from '../lib/ui'
 import { answer, welcome, type AssistantPrefs, type ChatMemory, type Reply, type ReplyAction } from '../features/assistant/engine'
 import { DEFAULT_BOT_NAME, DEFAULT_PERSONALITY, PERSONALITIES, type PersonalityId } from '../features/assistant/personality'
 import { useDictation } from '../features/quick/speech'
+import { aiPossible, aiReady, askAi, needsAi, type AiMode, type AiTurn } from '../features/assistant/ai'
+import { buildContext } from '../features/assistant/context'
+import { useAuth } from '../lib/cloud/auth'
 import { TxItem } from '../components/TxItem'
-import { Button, Card, cx, Field, IconButton, Input, PageHeader } from '../components/ui'
+import { Button, Card, cx, Field, IconButton, Input, PageHeader, Segmented } from '../components/ui'
 
 interface Msg {
   id: number
@@ -23,17 +26,25 @@ const useChat = create<{ msgs: Msg[]; memory: ChatMemory; typing: boolean }>()((
 let nextId = 1
 
 /** **negritas** → <b> */
+/** **negritas** → <b>; _(nota)_ → nota chica */
 const Rich = ({ text }: { text: string }) => (
   <>
-    {text.split(/\*\*(.+?)\*\*/g).map((part, i) =>
-      i % 2 ? (
-        <b key={i} className="font-extrabold">
-          {part}
-        </b>
-      ) : (
-        <Fragment key={i}>{part}</Fragment>
-      ),
-    )}
+    {text.split(/\*\*(.+?)\*\*|_\((.+?)\)_/g).map((part, i) => {
+      if (part === undefined) return null
+      if (i % 3 === 1)
+        return (
+          <b key={i} className="font-extrabold">
+            {part}
+          </b>
+        )
+      if (i % 3 === 2)
+        return (
+          <span key={i} className="mt-1 block text-xs text-muted">
+            ({part})
+          </span>
+        )
+      return <Fragment key={i}>{part}</Fragment>
+    })}
   </>
 )
 
@@ -41,6 +52,11 @@ const TONE: Record<string, string> = { good: 'text-good', bad: 'text-bad', muted
 
 const BotBubble = ({ reply, onAction }: { reply: Reply; onAction: (a: ReplyAction) => void }) => (
   <div className="max-w-[92%] min-w-0 space-y-2 rounded-3xl rounded-tl-lg border border-line bg-surface p-4 shadow-card">
+    {reply.ai && (
+      <span className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-bold text-brand">
+        <Sparkles className="size-3" /> IA
+      </span>
+    )}
     <p className="text-[15px] leading-relaxed whitespace-pre-line">
       <Rich text={reply.text} />
     </p>
@@ -125,13 +141,53 @@ const Avatar = ({ children, size = 32 }: { children?: ReactNode; size?: number }
 
 const isPersonality = (v?: string): v is PersonalityId => !!v && v in PERSONALITIES
 
+/** Encender la IA (Claude, a través de Supabase) */
+const AiSettings = ({ mode, onChange }: { mode: AiMode; onChange: (m: AiMode) => void }) => {
+  const signedIn = useAuth((s) => s.status === 'signedIn')
+  return (
+    <div className="mt-5 border-t border-line pt-4">
+      <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
+        <Sparkles className="size-3.5" /> Inteligencia artificial
+      </p>
+      <p className="mb-3 text-xs text-ink-2">
+        Con la IA (Claude) entiende cualquier pregunta, explica el porqué y conversa de verdad. Para responder, se envía tu
+        pregunta y un resumen de tus finanzas a tu servidor de Supabase y a Anthropic.
+      </p>
+      {signedIn ? (
+        <Segmented
+          size="sm"
+          value={mode}
+          onChange={(v) => {
+            vibrate(8)
+            onChange(v)
+          }}
+          options={[
+            { value: 'off', label: 'Apagada' },
+            { value: 'smart', label: 'Cuando haga falta' },
+            { value: 'always', label: 'Siempre' },
+          ]}
+        />
+      ) : (
+        <p className="rounded-2xl bg-surface-2 px-3 py-2.5 text-xs text-muted">Inicia sesión en Más → Mi cuenta para usarla.</p>
+      )}
+      {mode !== 'off' && signedIn && (
+        <p className="mt-2 text-[11px] text-muted">
+          {mode === 'smart'
+            ? 'Las preguntas simples se responden al tiro sin internet; las difíciles, los "¿por qué?" y los consejos van a la IA.'
+            : 'Todas las preguntas van a la IA (menos anotar gastos y las guías de la app).'}
+        </p>
+      )}
+    </div>
+  )
+}
+
 /** Elegir nombre y personalidad del asistente */
 const PersonalityPanel = ({ onDone }: { onDone: () => void }) => {
   const saved = useStore((s) => s.settings.assistant)
   const updateSettings = useStore((s) => s.updateSettings)
   const [name, setName] = useState(saved?.name ?? '')
   const current = isPersonality(saved?.personality) ? saved.personality : DEFAULT_PERSONALITY
-  const save = (patch: { name?: string; personality?: string }) =>
+  const save = (patch: { name?: string; personality?: string; ai?: AiMode }) =>
     updateSettings({ assistant: { ...useStore.getState().settings.assistant, ...patch } })
   return (
     <Card className="mb-4">
@@ -177,6 +233,7 @@ const PersonalityPanel = ({ onDone }: { onDone: () => void }) => {
           )
         })}
       </div>
+      {aiPossible() && <AiSettings mode={saved?.ai ?? 'off'} onChange={(ai) => save({ ai })} />}
       <Button
         block
         className="mt-4"
@@ -205,11 +262,23 @@ export default function Assistant() {
     personality: isPersonality(assistant?.personality) ? assistant.personality : DEFAULT_PERSONALITY,
   }
   const persona = PERSONALITIES[prefs.personality!]
+  const hello = msgs.length === 0 ? welcome(data, today, fmt, prefs) : null
   const timer = useRef(0)
   const dictation = useDictation((t, final) => {
     setText(t)
     if (final && t) send(t)
   })
+
+  const aiMode: AiMode = assistant?.ai ?? 'off'
+  const signedIn = useAuth((st) => st.status === 'signedIn')
+  const aiOn = aiReady(aiMode) && signedIn
+
+  const pushBot = (reply: Reply, memory: ChatMemory) =>
+    useChat.setState((s) => ({
+      msgs: [...s.msgs, { id: nextId++, from: 'bot', text: reply.text, reply }],
+      memory,
+      typing: false,
+    }))
 
   const send = (raw: string) => {
     const question = raw.trim()
@@ -217,23 +286,43 @@ export default function Assistant() {
     vibrate(6)
     setText('')
     dictation.stop()
-    const { memory } = useChat.getState()
+    let { memory } = useChat.getState()
+    // El saludo inicial queda en la conversación (y su "¿por qué?")
+    if (!useChat.getState().msgs.length && hello) {
+      useChat.setState({ msgs: [{ id: nextId++, from: 'bot', text: hello.text, reply: hello }] })
+      memory = { why: hello.why }
+    }
+    const history: AiTurn[] = useChat
+      .getState()
+      .msgs.map((m) => ({ role: m.from === 'me' ? 'user' : 'assistant', content: m.text }))
     useChat.setState((s) => ({ msgs: [...s.msgs, { id: nextId++, from: 'me', text: question }], typing: true }))
     window.clearTimeout(timer.current)
-    // Una pequeña pausa para que se sienta como conversación
     const turn = useChat.getState().msgs.length
     const res = answer(question, data, today, fmt, memory, { ...prefs, turn })
+    const kind = res.reply.kind ?? ''
+    // Anotar movimientos y las guías de la app se quedan con el asistente local (tienen botones)
+    const keepLocal = kind === 'register' || kind.startsWith('knowledge:')
+    if (aiOn && !keepLocal && (aiMode === 'always' || needsAi(question, kind))) {
+      const reference =
+        kind === 'unknown'
+          ? undefined
+          : [res.reply.text, res.reply.rows?.map((r) => `${r.label}: ${r.value}`).join('; '), res.reply.why]
+              .filter(Boolean)
+              .join('\n')
+      void askAi({
+        messages: [...history, { role: 'user', content: question }],
+        context: buildContext(data, today, fmt),
+        reference,
+        bot: prefs.botName!,
+        user: data.settings.userName,
+        personality: prefs.personality!,
+      })
+        .then((text) => pushBot({ text, ai: true, kind: 'ai', actions: res.reply.actions }, res.memory))
+        .catch((e: Error) => pushBot({ ...res.reply, text: `${res.reply.text}\n\n_(${e.message})_` }, res.memory))
+      return
+    }
     // Una pequeña pausa (según el largo) para que se sienta como conversación
-    timer.current = window.setTimeout(
-      () => {
-        useChat.setState((s) => ({
-          msgs: [...s.msgs, { id: nextId++, from: 'bot', text: res.reply.text, reply: res.reply }],
-          memory: res.memory,
-          typing: false,
-        }))
-      },
-      Math.min(1200, 350 + res.reply.text.length * 3),
-    )
+    timer.current = window.setTimeout(() => pushBot(res.reply, res.memory), Math.min(1200, 350 + res.reply.text.length * 3))
   }
 
   useEffect(() => () => window.clearTimeout(timer.current), [])
@@ -255,13 +344,12 @@ export default function Assistant() {
   }
 
   const last = msgs[msgs.length - 1]
-  const hello = msgs.length === 0 ? welcome(data, today, fmt, prefs) : null
 
   return (
     <div className="flex min-h-[calc(100dvh-9rem)] flex-col">
       <PageHeader
         title={prefs.botName!}
-        subtitle={`${persona.emoji} ${persona.label} · sin internet`}
+        subtitle={aiOn ? `${persona.emoji} ${persona.label} · ✨ con IA` : `${persona.emoji} ${persona.label} · sin internet`}
         actions={
           <>
             <IconButton label="Personalidad" onClick={() => setEditing((e) => !e)}>

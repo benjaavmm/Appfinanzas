@@ -50,6 +50,43 @@ export interface ChatMemory {
   intent?: Intent
   subject?: Subject
   period?: Period
+  /** Explicación de la última respuesta ("¿por qué?") */
+  why?: string
+}
+
+/** "¿Y por qué?", "¿cómo lo calculaste?", "explícame" */
+export const WHY_RE =
+  /^(y )?(por ?que|porque|como asi|como es eso|explica(me)?( eso| mejor)?|de donde (sale|sacas|salio)|como (lo )?calcul(as|aste|o)|en que te basas|y eso)\b/
+
+/** Explica la proyección de fin de mes con los números de la persona */
+export const explainProjection = (data: FinanceData, today: DateStr, fmt: Fmt): string => {
+  const st = monthStats(data, today)
+  const end = monthEnd(parseDate(today))
+  const pending = upcomingCharges(data.subscriptions, end)
+  const fixed = pending.reduce((s, c) => s + c.sub.amount, 0)
+  const daysLeft = Math.max(0, st.totalDays - st.dayOfMonth)
+  const variable = Math.max(0, st.projected - st.spent - fixed)
+  const rate = daysLeft ? variable / daysLeft : 0
+  const parts = [
+    `Lo calculo así: llevas **${fmt(st.spent)}** gastados en ${st.dayOfMonth} ${st.dayOfMonth === 1 ? 'día' : 'días'}.`,
+    daysLeft
+      ? `Si sigues a tu ritmo (unos **${fmt(Math.round(rate))} por día** en gastos variables, mezclando este mes con tu promedio de meses anteriores) durante los **${daysLeft} días** que quedan, son ~${fmt(Math.round(variable))} más.`
+      : '',
+    fixed
+      ? `Además faltan cobros fijos por **${fmt(fixed)}** (${pending
+          .slice(0, 3)
+          .map((c) => c.sub.name)
+          .join(', ')}${pending.length > 3 ? '…' : ''}).`
+      : '',
+    `Total: ~**${fmt(Math.round(st.projected))}**.`,
+  ]
+  if (st.income > 0 && st.projected > st.income)
+    parts.push(
+      `Te aviso porque este mes solo tienes anotados **${fmt(st.income)}** de ingresos. Si tu sueldo llega más adelante, anótalo cuando te paguen y el aviso se corrige solo.`,
+    )
+  else if (st.income === 0) parts.push('Todavía no tienes ingresos anotados este mes.')
+  if (st.avg3 > 0) parts.push(`Para comparar: en un mes normal gastas unos ${fmt(Math.round(st.avg3))}.`)
+  return parts.filter(Boolean).join(' ')
 }
 
 export interface Period {
@@ -550,11 +587,26 @@ const spentReply = (data: FinanceData, s: Subject, p: Period, fmt: Fmt, kind: 'e
   }
   let text = `${verb} **${fmt(total)}** ${what} ${p.label}`.replace(/\s+/g, ' ')
   let mood: Reply['mood'] = 'neutral'
+  let why =
+    `Sumo tus ${kind === 'expense' ? 'gastos' : 'ingresos'} anotados ${what} entre el ${fmtDate(p.from)} y el ${fmtDate(p.to)}: ${txs.length} ${txs.length === 1 ? 'movimiento' : 'movimientos'}.`.replace(
+      /\s+/g,
+      ' ',
+    )
   if (p.prev) {
-    const before = inRange(data.transactions, p.prev.from, p.prev.to)
-      .filter((t) => t.type === kind && matchTx(t, s))
-      .reduce((a, t) => a + t.amount, 0)
+    const prevTxs = inRange(data.transactions, p.prev.from, p.prev.to).filter((t) => t.type === kind && matchTx(t, s))
+    const before = prevTxs.reduce((a, t) => a + t.amount, 0)
     text += compareLine(total, before, p.prev.label, fmt, kind === 'expense')
+    if (kind === 'expense' && !s.category && !s.place && before > 0) {
+      const now = new Map(byCategory(txs, data.categories).map((c) => [c.category.id, c]))
+      const old = new Map(byCategory(prevTxs, data.categories).map((c) => [c.category.id, c]))
+      const diffs = [...new Set([...now.keys(), ...old.keys()])]
+        .map((id) => ({ c: (now.get(id) ?? old.get(id))!.category, d: (now.get(id)?.total ?? 0) - (old.get(id)?.total ?? 0) }))
+        .filter((x) => x.d !== 0)
+        .sort((a, b) => (total >= before ? b.d - a.d : a.d - b.d))
+        .slice(0, 3)
+      if (diffs.length)
+        why += ` Comparado con ${p.prev.label}, lo que más cambió fue: ${diffs.map((x) => `${x.c.icon} ${x.c.name} (${fmt(x.d, { sign: true })})`).join(', ')}.`
+    } else if (before > 0) why += ` ${cap(p.prev.label)} habían sido ${fmt(before)}.`
     const change = pct(total, before)
     if (before > 0)
       mood = (kind === 'expense' ? change <= -10 : change >= 10)
@@ -585,6 +637,7 @@ const spentReply = (data: FinanceData, s: Subject, p: Period, fmt: Fmt, kind: 'e
     rows,
     mood,
     kind: kind === 'expense' ? 'spent' : 'income',
+    why,
     txs: sortTx(txs).slice(0, 4),
     suggestions: [p.label === 'este mes' ? '¿Y el mes pasado?' : '¿Y este mes?', '¿En qué gasto más?'],
   }
@@ -619,7 +672,14 @@ const statusReply = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
   const overBudget = budget ? st.projected > budget * 1.05 || st.spent > budget : false
   const vsPrev = st.spentPrevSamePoint ? pct(st.spent, st.spentPrevSamePoint) : 0
   const mood: Reply['mood'] = overBudget || vsPrev >= 20 ? 'bad' : vsPrev <= -10 ? 'good' : 'neutral'
-  return { text, rows, mood, kind: 'status', suggestions: ['¿En qué gasto más?', 'Compara con el mes pasado', 'Dame un consejo'] }
+  return {
+    text,
+    rows,
+    mood,
+    kind: 'status',
+    why: explainProjection(data, today, fmt),
+    suggestions: ['¿Por qué?', '¿En qué gasto más?', 'Compara con el mes pasado'],
+  }
 }
 
 const topReply = (data: FinanceData, p: Period, fmt: Fmt): Reply => {
@@ -830,6 +890,12 @@ const cardReply = (data: FinanceData, today: DateStr, fmt: Fmt, q = ''): Reply =
     rows,
     kind: 'card',
     mood: parts.some((x) => x.includes('venció')) ? 'bad' : parts.length ? 'neutral' : 'good',
+    why: cards
+      .map((c) => {
+        const cs = cardSummary(c, data.transactions, bal.get(c.id) ?? 0, today)
+        return `${c.name}: el estado de cuenta que cerró el ${fmtDate(cs.lastClosing)} facturó ${fmt(cs.billed)} (compras y cuotas de ese período) y desde entonces has pagado ${fmt(cs.paidSinceClosing)}, así que quedan ${fmt(cs.toPay)} por pagar antes del ${fmtDate(cs.dueDate)}.`
+      })
+      .join(' '),
     actions: cards[0] ? [{ label: 'Ver tarjeta', kind: 'sheet', sheet: { kind: 'card', id: cards[0].id } }] : undefined,
   }
 }
@@ -872,6 +938,9 @@ const budgetReply = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
     rows,
     kind: 'budget',
     mood: over ? 'bad' : 'neutral',
+    why: budget
+      ? `Tomo tu presupuesto del mes (${fmt(budget)}), le resto lo que llevas gastado (${fmt(st.spent)}) y lo divido por los ${daysLeft} días que quedan, contando hoy.`
+      : `Como no tienes presupuesto total, uso lo que te entró este mes (${fmt(st.income)}) menos lo gastado (${fmt(st.spent)}), dividido por los ${daysLeft} días que quedan.`,
     actions: [{ label: 'Ver presupuestos', kind: 'nav', to: '/presupuestos' }],
   }
 }
@@ -1034,7 +1103,15 @@ const affordReply = (data: FinanceData, today: DateStr, fmt: Fmt, amount: number
   }
   const goal = data.goals.find((g) => goalSaved(g) < g.target)
   if (react !== 'affordYes' && goal) text += ` Ojo, que también estás juntando para **${goal.icon} ${goal.name}**.`
-  return { text, rows, react, kind: 'afford', mood: react === 'affordNo' ? 'bad' : react === 'affordYes' ? 'good' : 'neutral' }
+  const why = `Sumo la plata de tus cuentas de efectivo y débito (${fmt(liquid)}) y le resto lo que ya está comprometido hasta fin de mes: suscripciones ${fmt(committed.subs)}, pago de tarjeta ${fmt(committed.cards)} y deudas que vencen ${fmt(committed.debts)}. Lo que queda (${fmt(free)}) es lo libre; si la compra se come más de un tercio, te digo que queda justo.`
+  return {
+    text,
+    rows,
+    react,
+    why,
+    kind: 'afford',
+    mood: react === 'affordNo' ? 'bad' : react === 'affordYes' ? 'good' : 'neutral',
+  }
 }
 
 const savePlanReply = (data: FinanceData, fmt: Fmt, q: string, amount: number | undefined, goal?: Goal): Reply => {
@@ -1192,6 +1269,7 @@ const antsReply = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
     })),
     kind: 'ants',
     mood: total > ref * 0.08 ? 'bad' : 'neutral',
+    why: `Cuento como "hormiga" cada compra de hasta ${fmt(Math.round(limit))} (el 1,2% de lo que gastas en un mes normal) que no sea una suscripción, en los últimos 30 días.`,
   }
 }
 
@@ -1430,8 +1508,13 @@ export const welcome = (data: FinanceData, today: DateStr, fmt: Fmt, prefs: Assi
   const top = data.transactions.length ? generateInsights(data, today, fmt)[0] : undefined
   return {
     text: top ? `${greet}\n\n${top.emoji} **${top.title}.** ${top.body}` : greet,
-    suggestions: STARTER_SUGGESTIONS,
+    suggestions: top ? ['¿Por qué?', ...STARTER_SUGGESTIONS.slice(0, 4)] : STARTER_SUGGESTIONS,
     kind: 'welcome',
+    why: top
+      ? top.id === 'projection'
+        ? explainProjection(data, today, fmt)
+        : `${top.body} Lo saco de tus movimientos anotados en la app.`
+      : undefined,
   }
 }
 
@@ -1496,6 +1579,13 @@ export const answer = (
       suggestions: STARTER_SUGGESTIONS,
       kind: 'greet',
     })
+
+  // "¿Por qué?": se explica la respuesta anterior
+  if (WHY_RE.test(q) && q.split(' ').length <= 6) {
+    if (memory.why) return done({ text: memory.why, kind: 'why', suggestions: ['¿En qué gasto más?', 'Dame un consejo'] })
+    if (memory.intent === 'status' || !memory.intent)
+      return done({ text: explainProjection(data, today, fmt), kind: 'why' }, { ...memory, why: undefined })
+  }
 
   // "ok", "dale", "sí": se sigue la conversación
   if (/^(ok|oka|okey|okis|dale|vale|listo|ya|si|no|bueno|perfecto|entiendo|ah+|mm+|y|ya veo|bacan|filo)$/.test(q))
@@ -1701,5 +1791,8 @@ export const answer = (
     if (closer) text = `${text}\n\n${closer}`
   }
   if (greeted) text = `${L('greet')}\n\n${text}`
-  return { reply: { ...reply, text, kind: reply.kind ?? intent }, memory: intent ? mem : memory }
+  return {
+    reply: { ...reply, text, kind: reply.kind ?? intent },
+    memory: intent ? { ...mem, why: reply.why } : { ...memory, why: reply.why },
+  }
 }

@@ -265,3 +265,49 @@ describe('preguntas reales (revisión de calidad)', () => {
     expect(ask('si junto 100 mil al mes cuanto tengo en 2 años').reply.text).toContain(fmt(2400000))
   })
 })
+
+describe('¿por qué?', () => {
+  it('explica la respuesta anterior con los números', () => {
+    const first = ask('¿cómo voy este mes?')
+    expect(first.reply.why).toBeTruthy()
+    const second = ask('¿y por qué?', first.memory)
+    expect(second.reply.kind).toBe('why')
+    expect(second.reply.text).toContain('Lo calculo así')
+  })
+  it('explica el aviso del saludo', async () => {
+    const { welcome } = await import('../engine')
+    const hello = welcome(data, today, fmt)
+    const r = ask('por que?', { why: hello.why })
+    expect(r.reply.kind).toBe('why')
+    expect(r.reply.text.length).toBeGreaterThan(20)
+  })
+  it('sin respuesta anterior, explica la proyección del mes', () => {
+    expect(ask('¿por qué?').reply.text).toContain('Lo calculo así')
+  })
+  it('explica la tarjeta, el presupuesto y "¿me alcanza?"', () => {
+    for (const q of [
+      '¿cuánto tengo que pagar de la tarjeta?',
+      '¿cuánto puedo gastar por día?',
+      '¿me alcanza para unas zapatillas de 60 lucas?',
+    ]) {
+      const r = ask(q)
+      expect(r.reply.why, q).toBeTruthy()
+      expect(ask('¿cómo lo calculaste?', r.memory).reply.text).toBe(r.reply.why)
+    }
+  })
+})
+
+describe('resumen para la IA', () => {
+  it('incluye cuentas, mes, categorías, préstamos y movimientos, y no es gigante', async () => {
+    const { buildContext } = await import('../context')
+    const c = buildContext(data, today, fmt)
+    for (const s of ['## Cuentas', '## Este mes', '## Gasto por categoría', '## Últimos movimientos']) expect(c).toContain(s)
+    expect(c.length).toBeLessThan(24001)
+  })
+  it('decide cuándo vale la pena la IA', async () => {
+    const { needsAi } = await import('../ai')
+    expect(needsAi('¿por qué gasto tanto en delivery?', 'spent')).toBe(true)
+    expect(needsAi('xyz', 'unknown')).toBe(true)
+    expect(needsAi('¿cuánto gasté en comida?', 'spent')).toBe(false)
+  })
+})
