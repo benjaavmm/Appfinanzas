@@ -4,7 +4,7 @@ import { Delete } from 'lucide-react'
 import { vibrate } from '../lib/hooks'
 import { cx } from './ui'
 
-/** Teclado numérico de 4 dígitos. `onComplete` devuelve false si el PIN es incorrecto (sacude). */
+/** Teclado numérico de 4 dígitos. `onComplete` devuelve false (o una promesa de false) si el PIN es incorrecto (sacude). */
 export const PinPad = ({
   title,
   subtitle,
@@ -12,21 +12,22 @@ export const PinPad = ({
 }: {
   title: string
   subtitle?: string
-  onComplete: (pin: string) => boolean | void
+  onComplete: (pin: string) => boolean | void | Promise<boolean | void>
 }) => {
   const [pin, setPin] = useState('')
   const shake = useAnimation()
 
   useEffect(() => {
     if (pin.length !== 4) return
-    const ok = onComplete(pin)
-    if (ok === false) {
-      vibrate(80)
-      void shake.start({ x: [0, -12, 12, -8, 8, 0], transition: { duration: 0.4 } })
-      const t = window.setTimeout(() => setPin(''), 350)
-      return () => window.clearTimeout(t)
-    }
-    setPin('')
+    let timer = 0
+    void Promise.resolve(onComplete(pin)).then((ok) => {
+      if (ok === false) {
+        vibrate(80)
+        void shake.start({ x: [0, -12, 12, -8, 8, 0], transition: { duration: 0.4 } })
+        timer = window.setTimeout(() => setPin(''), 350)
+      } else setPin('')
+    })
+    return () => window.clearTimeout(timer)
   }, [pin]) // Solo reaccionamos al completar los 4 dígitos
 
   useEffect(() => {
