@@ -223,3 +223,45 @@ describe('guía de la app y conceptos', () => {
     }
   })
 })
+
+describe('preguntas reales (revisión de calidad)', () => {
+  const cases: [string, string | RegExp][] = [
+    ['gaste mas q el mes pasado?', 'compare'],
+    ['cuanto gasto al dia', 'average'],
+    ['mi gasto mas grande del mes', 'biggest'],
+    ['cuanto gaste con la tarjeta', 'spent'],
+    ['cuanto gasto normalmente al mes en comida', 'monthlyAvg'],
+    ['gasto en salud', 'spent'],
+    ['en que se me fue la plata en agosto', 'top'],
+    ['tengo plata?', 'balance'],
+    ['voy bien?', 'status'],
+    ['cuanto es la cuota del celular', 'installments'],
+    ['cuando pago la tarjeta', 'card'],
+    ['cuanto pago de streaming', 'subs'],
+    ['me alcanza pa unas zapatillas de 45 lucas', 'afford'],
+    ['me puedo dar el gusto de un viaje de 1 palo', 'afford'],
+    ['mis gastos hormiga', 'ants'],
+    ['como borro un gasto', /^knowledge:/],
+    ['como creo un presupuesto', /^knowledge:/],
+    ['como agrego una meta', /^knowledge:/],
+    ['sueldo liquido vs bruto', /^knowledge:/],
+    ['que significa el cupo', /^knowledge:/],
+    ['se me cayo la app', 'knowledge:actualizar-app'],
+    ['buenas tardes', 'greet'],
+    ['ok', 'smalltalk:ack'],
+    ['cuentame algo', 'smalltalk:joke'],
+    ['me ayudas?', 'help'],
+  ]
+  for (const [text, expected] of cases)
+    it(text, () => {
+      const k = ask(text).reply.kind ?? ''
+      if (typeof expected === 'string') expect(k).toBe(expected)
+      else expect(k).toMatch(expected)
+    })
+  it('"¿gasté más que el mes pasado?" compara este mes', () => {
+    expect(ask('gaste mas q el mes pasado?').reply.text).toMatch(/^.*Este mes/)
+  })
+  it('"si junto 100 mil al mes cuánto tengo en 2 años"', () => {
+    expect(ask('si junto 100 mil al mes cuanto tengo en 2 años').reply.text).toContain(fmt(2400000))
+  })
+})

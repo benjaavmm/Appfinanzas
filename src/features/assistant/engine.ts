@@ -189,11 +189,11 @@ export const readPeriod = (q: string, today: DateStr): Period | undefined => {
     return range(addDaysStr(monday, -7), addDaysStr(monday, -1), 'la semana pasada', 'la semana anterior')
   if (has(q, 'semana')) return range(monday, today, 'esta semana', 'la semana pasada')
   if (has(q, 'mes pasado', 'mes anterior', 'ultimo mes')) return monthPeriod(shiftMonth(ref, -1), today, 'el mes pasado')
-  if (has(q, 'ano pasado')) {
+  if (has(q, 'ano pasado', 'año pasado')) {
     const y = ref.getFullYear() - 1
     return range(`${y}-01-01`, `${y}-12-31`, `el ${y}`)
   }
-  if (has(q, 'este ano', 'en el ano', /\bano\b/)) return range(`${ref.getFullYear()}-01-01`, today, 'este año')
+  if (has(q, 'este ano', 'en el ano', 'este año', /\ba(n|ñ)o\b/)) return range(`${ref.getFullYear()}-01-01`, today, 'este año')
   for (let i = 0; i < 12; i++) {
     if (!new RegExp(`\\b${MONTHS[i]}\\b`).test(q)) continue
     const yMatch = q.match(new RegExp(`${MONTHS[i]}\\s+(?:de(?:l)?\\s+)?(20\\d\\d)`))
@@ -239,6 +239,19 @@ const readSubject = (q: string, words: string[], data: FinanceData): Subject => 
   const s: Subject = {}
   // Categoría por su nombre ("comida", "transporte") o por palabras clave ("uber" → transporte)
   const cats = data.categories.filter((c) => c.kind === 'expense' || c.kind === 'income')
+  const GENERIC = new Set([
+    'gastos',
+    'gasto',
+    'otros',
+    'otras',
+    'otro',
+    'ingresos',
+    'ingreso',
+    'varios',
+    'pagos',
+    'cosas',
+    'general',
+  ])
   const byName = cats
     .map((c) => ({ c, k: fold(c.name) }))
     .filter(({ k }) =>
@@ -247,6 +260,7 @@ const readSubject = (q: string, words: string[], data: FinanceData): Subject => 
         .some(
           (part) =>
             part.length >= 4 &&
+            !GENERIC.has(part) &&
             words.some((w) => w === part || (w.length >= 5 && part.startsWith(w)) || (part.length >= 5 && w.startsWith(part))),
         ),
     )
@@ -300,7 +314,7 @@ const REGISTER_START =
 export const readIntent = (q: string, hasAmount: boolean): Intent | undefined => {
   if (REGISTER_START.test(q) && hasAmount && !has(q, 'cuanto')) return 'register'
   if (
-    /^(ayuda|help)\b/.test(q) ||
+    /^(ayuda|help|me ayudas|ayudame|no te entiendo|no entiendo)\b/.test(q) ||
     has(q, 'que puedes', 'que sabes hacer', 'que haces', 'en que me ayudas', 'que te puedo preguntar')
   )
     return 'help'
@@ -315,6 +329,8 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
       'podre comprar',
       'me compro',
       'puedo darme el gusto',
+      'me puedo dar el gusto',
+      'darme el gusto',
     ) ||
     (hasAmount && has(q, 'conviene comprar', 'deberia comprar'))
   )
@@ -339,6 +355,9 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
     )
   )
     return 'installments'
+  if (has(q, 'gaste con', 'gastado con', 'pague con', 'compre con', 'gasto con')) return 'spent'
+  if (has(q, 'que el mes pasado', 'que la semana pasada', 'que el ano pasado', 'que el otro mes')) return 'compare'
+  if (has(q, 'la cuota del', 'la cuota de', 'cuota mensual')) return 'installments'
   if (has(q, 'tarjeta', 'cupo', 'cuota', 'estado de cuenta', 'credito', 'facturacion')) return 'card'
   if (
     has(
@@ -358,7 +377,7 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
   if (has(q, 'me falta para', 'falta para la meta', 'falta para mi meta', 'cuando llego a', 'cuando completo')) return 'goals'
   if (has(q, 'me debe', 'me deben', 'deudores', 'por cobrar', 'quien me')) return 'owedToMe'
   if (has(q, 'le debo', 'debo', 'mis deudas', 'deuda')) return 'iOwe'
-  if (has(q, 'suscrip', 'pagos fijos', 'gastos fijos', 'cobros fijos')) return 'subs'
+  if (has(q, 'suscrip', 'pagos fijos', 'gastos fijos', 'cobros fijos', 'streaming')) return 'subs'
   if (has(q, 'presupuesto', 'puedo gastar', 'me queda para', 'cuanto me queda', 'limite')) return 'budget'
   if (has(q, 'meta', 'ahorrando para', 'objetivo')) return 'goals'
   if (
@@ -403,6 +422,9 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
       'promedio por mes',
       'al mes en promedio',
       'normalmente gasto',
+      'gasto normalmente',
+      'por lo general gasto',
+      'gasto en promedio',
       'cuanto gasto al mes',
       'gasto mensual',
       'en un mes normal',
@@ -418,6 +440,8 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
       'en que gasto',
       'donde gasto',
       'en que se me va',
+      'se me fue la plata',
+      'en que se me fue',
       'se me va la plata',
       'se me va la plata',
       /\btop\b/,
@@ -443,6 +467,10 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
       'disponible',
       'cuanta plata hay',
       'cuanto hay en',
+      'cuanta luca',
+      'cuantas lucas',
+      'tengo plata',
+      'me queda plata',
     )
   )
     return 'balance'
@@ -455,7 +483,12 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
       'como estoy',
       'como me va',
       'resumen',
-      'salud',
+      'salud financiera',
+      'voy bien',
+      'voy mal',
+      'me estoy pasando',
+      'estoy bien',
+      'estoy mal',
       'balance del mes',
       'como ando',
       'como va',
@@ -734,7 +767,7 @@ const subsReply = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
   }
 }
 
-const cardReply = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
+const cardReply = (data: FinanceData, today: DateStr, fmt: Fmt, q = ''): Reply => {
   const cards = data.accounts.filter((a) => a.type === 'credit' && !a.archived)
   if (!cards.length)
     return {
@@ -780,7 +813,20 @@ const cardReply = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
     )
   }
   return {
-    text: parts.length ? `${parts.join('. ')}.` : 'No tienes pagos de tarjeta pendientes ahora 👌.',
+    text: (() => {
+      const base = parts.length ? `${parts.join('. ')}.` : 'No tienes pagos de tarjeta pendientes ahora 👌.'
+      if (!has(q, 'cupo', 'disponible')) return base
+      const cupos = cards
+        .map((c) => ({ c, s: cardSummary(c, data.transactions, bal.get(c.id) ?? 0, today) }))
+        .filter((x) => x.s.available !== undefined)
+      if (!cupos.length) return `No tengo el cupo de tu tarjeta: agrégalo editando la tarjeta en Cuentas. ${base}`
+      return `${cupos
+        .map(
+          (x) =>
+            `${one ? 'Te quedan' : `${x.c.name}: te quedan`} **${fmt(x.s.available!)}** de cupo disponible (de ${fmt(x.c.creditLimit ?? 0)})`,
+        )
+        .join('. ')}. ${base}`
+    })(),
     rows,
     kind: 'card',
     mood: parts.some((x) => x.includes('venció')) ? 'bad' : parts.length ? 'neutral' : 'good',
@@ -995,7 +1041,7 @@ const savePlanReply = (data: FinanceData, fmt: Fmt, q: string, amount: number | 
   if (!amount)
     return { text: 'Dime cuánto: por ejemplo **"si ahorro 50 lucas al mes, ¿cuánto tendré en un año?"**', kind: 'savePlan' }
   const perMonth = has(q, 'semana', 'semanal') ? amount * 4.345 : has(q, 'dia', 'diario') ? amount * 30.44 : amount
-  const yearsMatch = q.match(/(\d+)\s+anos?/)
+  const yearsMatch = q.match(/(\d+)\s+a(n|ñ)os?/)
   const monthsMatch = q.match(/(\d+)\s+mes(es)?/)
   const horizons = yearsMatch
     ? [Number(yearsMatch[1]) * 12]
@@ -1026,7 +1072,6 @@ const savePlanReply = (data: FinanceData, fmt: Fmt, q: string, amount: number | 
     text: `Si ahorras **${fmt(Math.round(perMonth))} al mes**, en ${last % 12 === 0 ? `${last / 12} ${last === 12 ? 'año' : 'años'}` : `${last} meses`} juntarías **${fmt(Math.round(perMonth * last))}** (sin contar intereses).`,
     rows,
     kind: 'savePlan',
-    mood: 'good',
     actions: [{ label: 'Crear meta de ahorro', kind: 'sheet', sheet: { kind: 'goal' } }],
   }
 }
@@ -1171,13 +1216,16 @@ const installmentsReply = (data: FinanceData, today: DateStr, fmt: Fmt): Reply =
   }
 }
 
-const subDetailReply = (data: FinanceData, sub: Subscription, today: DateStr, fmt: Fmt): Reply => {
+const subDetailReply = (data: FinanceData, sub: Subscription, today: DateStr, fmt: Fmt, q = ''): Reply => {
   const acc = data.accounts.find((a) => a.id === sub.accountId)
   const next = upcomingCharges([sub], addDaysStr(today, 400))[0]
   return {
-    text: sub.active
-      ? `**${sub.name}** te cuesta **${fmt(sub.amount)}** (${frequencyLabel(sub.frequency).toLowerCase()}), o sea ${fmt(Math.round(monthlyEquivalent(sub)))} al mes y ${fmt(Math.round(monthlyEquivalent(sub) * 12))} al año.`
-      : `**${sub.name}** está pausada: no se está cobrando.`,
+    text:
+      sub.active && next && has(q, 'cuando', 'que dia', 'fecha')
+        ? `**${sub.name}** se cobra el **${fmtDate(next.date)}**: ${fmt(sub.amount)} (${frequencyLabel(sub.frequency).toLowerCase()}).`
+        : sub.active
+          ? `**${sub.name}** te cuesta **${fmt(sub.amount)}** (${frequencyLabel(sub.frequency).toLowerCase()}), o sea ${fmt(Math.round(monthlyEquivalent(sub)))} al mes y ${fmt(Math.round(monthlyEquivalent(sub) * 12))} al año.`
+          : `**${sub.name}** está pausada: no se está cobrando.`,
     rows: [
       ...(next && sub.active ? [{ icon: '📅', label: 'Próximo cobro', value: `${fmtDate(next.date)}` }] : []),
       ...(acc ? [{ icon: acc.icon, label: 'Se paga con', value: acc.name }] : []),
@@ -1249,11 +1297,17 @@ const KSTOP = new Set([
   'pongo',
   'veo',
 ])
-const stem = (w: string) => (w.length > 5 ? w.slice(0, 5) : w)
+/** Raíz simple para comparar "borro"/"borrar", "boletas"/"boleta", "creo"/"crear" */
+const stem = (w: string) => {
+  let x = w.length > 4 ? w.replace(/s$/, '') : w
+  if (x.length >= 4) x = x.replace(/(ando|iendo|amos|emos|ar|er|ir|an|en|o|a|e)$/, '')
+  return x.slice(0, 6)
+}
 
 const scoreEntry = (q: string, stems: Set<string>, e: KnowledgeEntry) => {
   let best = 0
-  for (const t of e.triggers) {
+  for (const trig of e.triggers) {
+    const t = trig.replace(/ñ/g, 'n')
     const tw = t.split(' ').filter((w) => w && !KSTOP.has(w))
     if (!tw.length) continue
     // "se cae la app" no es el CAE
@@ -1320,7 +1374,7 @@ const SMALLTALK: [Moment, RegExp][] = [
     /^(muchas )?(gracias|grax|thanks|thank you|vale gracias|ok gracias|genial gracias|buena gracias)\b|\bmuchas gracias\b/,
   ],
   ['bye', /^(chao|chau|adios|nos vemos|bye|hasta luego|hasta pronto|me voy)\b/],
-  ['joke', /\b(chiste|algo gracioso|hazme reir|una talla|cuentame una talla|tallita)\b/],
+  ['joke', /\b(chiste|algo gracioso|hazme reir|una talla|cuentame una talla|tallita|cuentame algo)\b/],
   ['motivate', /\b(motivame|motivacion|animame|dame animo|estoy desmotivad[oa]|no tengo ganas de ahorrar)\b/],
   [
     'sad',
@@ -1337,7 +1391,7 @@ const SMALLTALK: [Moment, RegExp][] = [
   ],
   ['laugh', /^(ja){2,}|^(je){2,}|^(jsjs|jajs|xd|lol|jaj)/],
 ]
-const GREETING = /^(hola+|holi|wena+|buenas|buenos dias|buenas tardes|buenas noches|hey|ola|que onda|alo|saludos)\b\s*/
+const GREETING = /^(buenos dias|buenas tardes|buenas noches|buen dia|hola+|holi|wena+|buenas|hey|ola|que onda|alo|saludos)\b\s*/
 
 export interface AssistantPrefs {
   botName?: string
@@ -1413,9 +1467,20 @@ export const answer = (
   prefs: AssistantPrefs = {},
 ): { reply: Reply; memory: ChatMemory } => {
   let q = fold(question)
+    .replace(/ñ/g, 'n')
     .replace(/[¿?¡!.,;:"“”()]/g, ' ')
+    .replace(/\b(q|k|ke)\b/g, 'que')
+    .replace(/\bpa\b/g, 'para')
+    .replace(/\b(xq|pq|porq)\b/g, 'porque')
     .replace(/\s+/g, ' ')
     .trim()
+  // "hola luka, ¿…?": el nombre del asistente no es parte de la pregunta
+  const botWord = fold(prefs.botName || DEFAULT_BOT_NAME).replace(/ñ/g, 'n')
+  if (botWord.length >= 3)
+    q = q
+      .replace(new RegExp(`\\b${botWord}\\b`, 'g'), ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
   const userName = data.settings.userName?.trim().split(/\s+/)[0] ?? ''
   const seed = hash(q) + (prefs.turn ?? 0) * 7
   const L = (m: Moment) => line(m, prefs, userName, seed)
@@ -1430,6 +1495,14 @@ export const answer = (
       text: `${L('greet') || `¡Hola${userName ? ` ${userName}` : ''}! 👋`}\n\n${CAPABILITIES}`,
       suggestions: STARTER_SUGGESTIONS,
       kind: 'greet',
+    })
+
+  // "ok", "dale", "sí": se sigue la conversación
+  if (/^(ok|oka|okey|okis|dale|vale|listo|ya|si|no|bueno|perfecto|entiendo|ah+|mm+|y|ya veo|bacan|filo)$/.test(q))
+    return done({
+      text: L('closer') || '👍 ¿Qué más quieres saber?',
+      suggestions: STARTER_SUGGESTIONS.slice(0, 3),
+      kind: 'smalltalk:ack',
     })
 
   // Conversación (gracias, chistes, ¿quién eres?…)
@@ -1454,9 +1527,16 @@ export const answer = (
 
   // "¿Cómo agrego una tarjeta?", "¿qué es el CAE?": guía de la app o concepto
   const howTo = HOW_TO.test(q) && !NOT_HOW_TO.test(q)
+  // Intenciones amplias que una frase exacta de la guía puede ganarle ("sueldo líquido vs bruto")
+  const BROAD_INTENTS = new Set<Intent>(['spent', 'compare', 'top', 'average', 'last', 'balance', 'subs', 'budget', 'goals'])
   if (intent !== 'afford' && intent !== 'register' && intent !== 'savePlan') {
     const k = bestKnowledge(q)
-    if (k && ((howTo && k.score >= 4) || (!intent && k.score >= 5) || k.score >= 12))
+    if (
+      k &&
+      ((howTo && k.score >= (CONCEPT_Q.test(q) ? 3 : 4)) ||
+        (!intent && k.score >= 5) ||
+        (k.score >= 9 && (!intent || BROAD_INTENTS.has(intent))))
+    )
       return done(wrapGreeting(knowledgeReply(k.entry)))
   }
 
@@ -1467,6 +1547,8 @@ export const answer = (
   if (!intent && followUp && memory.intent) {
     intent = memory.intent
     if (noSubject) subject = memory.subject ?? {}
+    // "¿cómo voy?" es del mes; "¿y la semana pasada?" pregunta cuánto se gastó
+    if (period && (intent === 'status' || intent === 'budget')) intent = 'spent'
     if (!period) period = memory.period
   }
   if (!intent && subject.subscription) intent = 'subDetail'
@@ -1474,6 +1556,8 @@ export const answer = (
   if (!intent && !noSubject) intent = subject.person ? 'owedToMe' : 'spent'
   if (!intent && period) intent = 'spent'
   if (subject.subscription && (intent === 'subs' || intent === 'spent' || intent === 'upcoming')) intent = 'subDetail'
+  // "¿gasté más que el mes pasado?" compara ESTE mes con el pasado
+  if (intent === 'compare' && has(q, 'que el mes pasado', 'que la semana pasada')) period = undefined
   // Contar y "última vez" sin período miran todo el historial
   period ??= intent === 'count' ? readPeriod('en total', today)! : readPeriod('este mes', today)!
   const mem: ChatMemory = { intent, subject, period }
@@ -1519,7 +1603,7 @@ export const answer = (
       case 'installments':
         return installmentsReply(data, today, fmt)
       case 'subDetail':
-        return subject.subscription ? subDetailReply(data, subject.subscription, today, fmt) : subsReply(data, today, fmt)
+        return subject.subscription ? subDetailReply(data, subject.subscription, today, fmt, q) : subsReply(data, today, fmt)
       case 'monthlyAvg':
         return monthlyAvgReply(data, subject, today, fmt)
       case 'balance':
@@ -1531,7 +1615,7 @@ export const answer = (
       case 'subs':
         return subsReply(data, today, fmt)
       case 'card':
-        return subject.accountId ? accountReply(data, subject.accountId, today, fmt) : cardReply(data, today, fmt)
+        return subject.accountId ? accountReply(data, subject.accountId, today, fmt) : cardReply(data, today, fmt, q)
       case 'budget':
         return budgetReply(data, today, fmt)
       case 'goals': {
@@ -1585,7 +1669,7 @@ export const answer = (
       default: {
         // Último intento: algo de la guía con menos seguridad
         const k = bestKnowledge(q)
-        if (k && k.score >= 3) return knowledgeReply(k.entry)
+        if (k && k.score >= 4) return knowledgeReply(k.entry)
         return {
           text: OFF_TOPIC.test(q)
             ? 'De eso no sé mucho 😅: lo mío son tus finanzas y la app. Pregúntame, por ejemplo:'
@@ -1605,7 +1689,14 @@ export const answer = (
     const pre = L(react)
     if (pre) text = `${pre} ${text}`
   }
-  if (!reply.suggestions?.length && reply.kind !== 'unknown' && seed % 3 === 0) {
+  if (
+    !reply.suggestions?.length &&
+    !reply.actions?.length &&
+    !reply.txs?.length &&
+    !reply.text.trim().endsWith(':') &&
+    reply.kind !== 'unknown' &&
+    seed % 3 === 0
+  ) {
     const closer = L('closer')
     if (closer) text = `${text}\n\n${closer}`
   }

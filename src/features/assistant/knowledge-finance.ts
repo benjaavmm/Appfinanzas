@@ -31,6 +31,8 @@ export const FINANCE_KNOWLEDGE: KnowledgeEntry[] = [
     id: 'concepto-cuotas',
     kind: 'concept',
     triggers: [
+      'que es una cuota',
+      'que son las cuotas',
       'compras en cuotas',
       'comprar en cuotas',
       'cuotas sin interes',

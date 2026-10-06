@@ -513,6 +513,7 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     kind: 'app',
     triggers: [
       'crear un presupuesto',
+      'agregar un presupuesto',
       'poner un presupuesto',
       'pongo un presupuesto',
       'definir un presupuesto',
@@ -538,6 +539,7 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     kind: 'app',
     triggers: [
       'crear una meta',
+      'agregar una meta',
       'creo una meta',
       'nueva meta',
       'ahorrar para algo',
@@ -763,6 +765,17 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     related: ['¿Qué son los accesos directos del ícono?', '¿Cómo actualizo la app?'],
   },
   {
+    id: 'cambiar-mi-nombre',
+    kind: 'app',
+    triggers: ['cambiar mi nombre', 'cambio mi nombre', 'mi nombre', 'como me llamo en la app'],
+    title: 'Cambiar tu nombre',
+    answer:
+      'Tu nombre está en **Ajustes → Perfil → Tu nombre**. Si tienes cuenta, el nombre que ven tus amigos se cambia en **Más → Mi cuenta → Editar**.',
+    steps: ['Ve a **Más → Ajustes**.', 'En **Perfil**, cambia **Tu nombre**.'],
+    action: { label: 'Ir a Ajustes', kind: 'nav', to: '/ajustes' },
+    related: ['¿Cómo le cambio el nombre al asistente?'],
+  },
+  {
     id: 'actualizar-app',
     kind: 'app',
     triggers: [
@@ -775,6 +788,8 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
       'app desactualizada',
       'se cae la app',
       'se me cae la app',
+      'se cayo la app',
+      'se me cayo la app',
       'la app no funciona',
       'la app falla',
       'pantalla en negro',
