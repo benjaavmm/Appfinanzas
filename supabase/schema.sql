@@ -205,6 +205,10 @@ create policy friendships_select on public.friendships for select to authenticat
 drop policy if exists friendships_accept on public.friendships;
 create policy friendships_accept on public.friendships for update to authenticated
   using (addressee = auth.uid() and status = 'pending') with check (addressee = auth.uid() and status = 'accepted');
+-- Aceptar solo puede cambiar "status": sin esto, quien recibe una solicitud podría reescribir
+-- requester y quedar "amigo" de cualquiera sin que esa persona lo acepte.
+revoke update on public.friendships from authenticated, anon;
+grant update (status) on public.friendships to authenticated;
 drop policy if exists friendships_delete on public.friendships;
 create policy friendships_delete on public.friendships for delete to authenticated
   using (auth.uid() in (requester, addressee));

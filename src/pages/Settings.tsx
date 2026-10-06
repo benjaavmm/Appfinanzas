@@ -13,7 +13,8 @@ import {
   Trash,
   Upload,
 } from 'lucide-react'
-import { exportCSV, exportJSON, hashPin, parseBackup } from '../lib/backup'
+import { exportCSV, exportJSON, parseBackupReport } from '../lib/backup'
+import { hashPin } from '../lib/pin'
 import { buildDemoData } from '../lib/demo'
 import { CURRENCIES } from '../lib/format'
 import { fmtDate, toDateStr } from '../lib/dates'
@@ -53,10 +54,12 @@ export default function Settings() {
 
   const onImport = async (file: File) => {
     try {
-      const parsed = parseBackup(await file.text())
+      const { data: parsed, dropped } = parseBackupReport(await file.text())
       const ok = await ask({
         title: '¿Restaurar este respaldo?',
-        message: `Tiene ${parsed.transactions.length} movimientos y ${parsed.accounts.length} cuentas. Reemplazará todos los datos actuales.`,
+        message: `Tiene ${parsed.transactions.length} movimientos y ${parsed.accounts.length} cuentas. Reemplazará todos los datos actuales.${
+          dropped > 0 ? ` Se omitirán ${dropped} registros dañados que no se pueden leer.` : ''
+        }`,
         confirmLabel: 'Restaurar',
         danger: true,
       })
@@ -347,9 +350,9 @@ export default function Settings() {
             <PinPad
               key="confirm"
               title="Repite tu PIN"
-              onComplete={(p) => {
+              onComplete={async (p) => {
                 if (p !== firstPin) return false
-                update({ pinHash: hashPin(p) })
+                update({ pinHash: await hashPin(p) })
                 setPinStep(null)
                 toast({ message: '🔒 PIN activado' })
               }}

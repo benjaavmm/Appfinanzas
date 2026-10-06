@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ArrowLeft, LoaderCircle, Lock, Mail, MailCheck } from 'lucide-react'
-import { hashPin } from '../lib/backup'
+import { clearPinFailures, hashPin, isLegacyPin, pinWaitMs, registerPinFailure, verifyPin } from '../lib/pin'
 import { useStore } from '../lib/store'
 import { ask, toast } from '../lib/ui'
 import { cloudConfigured } from '../lib/cloud/client'
@@ -11,8 +11,11 @@ import { PinPad } from '../components/PinPad'
 import { Button, Input } from '../components/ui'
 
 /** Quita el PIN olvidado después de comprobar que eres el dueño de la cuenta */
+const formatWait = (ms: number) => (ms >= 60_000 ? `${Math.ceil(ms / 60_000)} min` : `${Math.ceil(ms / 1000)} s`)
+
 const removePin = (onUnlock: () => void) => {
   useStore.getState().updateSettings({ pinHash: undefined })
+  clearPinFailures()
   onUnlock()
   toast({ message: '🔓 PIN quitado. Puedes poner uno nuevo en Ajustes.', tone: 'good' })
 }
@@ -67,6 +70,7 @@ const ForgotPin = ({ onBack, onUnlock }: { onBack: () => void; onUnlock: () => v
     })
     if (!ok) return
     resetAll()
+    clearPinFailures()
     onUnlock()
   }
 
@@ -175,11 +179,23 @@ export default function LockScreen({ onUnlock }: { onUnlock: () => void }) {
   const pinHash = useStore((s) => s.settings.pinHash)
   const name = useStore((s) => s.settings.userName)
   const fromEmailLink = useAuth((s) => s.fromEmailLink)
+  const updateSettings = useStore((s) => s.updateSettings)
   const [forgot, setForgot] = useState(fromEmailLink)
+  // Tras varios intentos fallidos hay que esperar antes de probar otra vez
+  const [wait, setWait] = useState(() => pinWaitMs())
+  const waiting = wait > 0
+
   // Al volver con el link del correo se muestra directo la opción de quitar el PIN
   useEffect(() => {
     if (fromEmailLink) setForgot(true)
   }, [fromEmailLink])
+
+  useEffect(() => {
+    if (!waiting) return
+    const t = window.setInterval(() => setWait(pinWaitMs()), 1000)
+    return () => window.clearInterval(t)
+  }, [waiting])
+
   return (
     <div className="pt-safe pb-safe flex min-h-dvh flex-col items-center justify-center bg-bg px-6 py-8">
       {forgot ? (
@@ -190,11 +206,27 @@ export default function LockScreen({ onUnlock }: { onUnlock: () => void }) {
           <PinPad
             title={name ? `Hola, ${name}` : 'Mis Finanzas'}
             subtitle="Ingresa tu PIN"
-            onComplete={(p) => {
-              if (hashPin(p) !== pinHash) return false
+            onComplete={async (p) => {
+              const left = pinWaitMs()
+              if (left > 0) {
+                setWait(left)
+                return false
+              }
+              if (!(await verifyPin(p, pinHash))) {
+                setWait(registerPinFailure())
+                return false
+              }
+              clearPinFailures()
+              // Los PIN guardados con el formato antiguo se actualizan al entrar bien
+              if (isLegacyPin(pinHash)) updateSettings({ pinHash: await hashPin(p) })
               onUnlock()
             }}
           />
+          {waiting && (
+            <p role="alert" className="mt-6 text-center text-sm font-semibold text-bad">
+              Demasiados intentos. Prueba de nuevo en {formatWait(wait)}.
+            </p>
+          )}
           <button className="mt-8 text-sm font-semibold text-muted" onClick={() => setForgot(true)}>
             ¿Olvidaste tu PIN?
           </button>

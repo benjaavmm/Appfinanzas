@@ -1,4 +1,5 @@
-import { DATA_VERSION, emptyData } from './defaults'
+import { DATA_VERSION } from './defaults'
+import { sanitizeData } from './sanitize'
 import { todayStr } from './dates'
 import { sortTx } from './finance'
 import type { FinanceData } from './types'
@@ -58,42 +59,26 @@ export const exportCSV = (data: FinanceData) => {
 
 const isArr = (v: unknown): v is unknown[] => Array.isArray(v)
 
+export interface BackupReport {
+  data: FinanceData
+  /** Cuántos registros dañados se descartaron al leer el archivo */
+  dropped: number
+}
+
 /** Valida un respaldo y lo normaliza. Lanza Error con un mensaje legible si no sirve. */
-export const parseBackup = (text: string): FinanceData => {
+export const parseBackupReport = (text: string): BackupReport => {
   let raw: unknown
   try {
     raw = JSON.parse(text)
   } catch {
     throw new Error('El archivo no es un JSON válido.')
   }
-  if (!raw || typeof raw !== 'object') throw new Error('El archivo no tiene el formato esperado.')
+  if (!raw || typeof raw !== 'object' || isArr(raw)) throw new Error('El archivo no tiene el formato esperado.')
   const r = raw as Record<string, unknown>
   for (const k of ['accounts', 'categories', 'transactions'] as const) {
     if (!isArr(r[k])) throw new Error(`Al respaldo le falta la sección "${k}".`)
   }
-  const base = emptyData()
-  return {
-    version: DATA_VERSION,
-    settings: { ...base.settings, ...(r.settings as object), onboarded: true },
-    accounts: r.accounts as FinanceData['accounts'],
-    categories: r.categories as FinanceData['categories'],
-    transactions: (r.transactions as FinanceData['transactions']).filter(
-      (t) => t && typeof t.amount === 'number' && typeof t.date === 'string',
-    ),
-    loans: isArr(r.loans) ? (r.loans as FinanceData['loans']).map((l) => ({ ...l, payments: l.payments ?? [] })) : [],
-    subscriptions: isArr(r.subscriptions) ? (r.subscriptions as FinanceData['subscriptions']) : [],
-    goals: isArr(r.goals) ? (r.goals as FinanceData['goals']).map((g) => ({ ...g, contributions: g.contributions ?? [] })) : [],
-  }
+  return sanitizeData(r, DATA_VERSION)
 }
 
-/**
- * Hash del PIN para no guardarlo en claro. Un PIN de 4 dígitos es un bloqueo de
- * privacidad casual (que nadie mire tu app), no cifrado; por eso basta un hash simple
- * que funciona igual en cualquier navegador.
- */
-export const hashPin = (pin: string): string => {
-  const text = `mis-finanzas:${pin}`
-  let h = 2166136261
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619) >>> 0
-  return `fnv-${h.toString(16)}`
-}
+export const parseBackup = (text: string): FinanceData => parseBackupReport(text).data
