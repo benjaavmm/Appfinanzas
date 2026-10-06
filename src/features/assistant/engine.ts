@@ -1342,8 +1342,12 @@ export const personalityOf = (prefs: AssistantPrefs = {}) =>
 
 /** Una frase de la personalidad para ese momento, con {name} y {bot} reemplazados */
 export const line = (moment: Moment, prefs: AssistantPrefs, userName: string, seed: number): string => {
-  const list = personalityOf(prefs)?.lines?.[moment]
-  if (!list?.length) return ''
+  const all = personalityOf(prefs)?.lines?.[moment]
+  if (!all?.length) return ''
+  // Las tallas con "luca" solo funcionan si el asistente se llama Luka
+  const custom = prefs.botName && fold(prefs.botName) !== fold(DEFAULT_BOT_NAME)
+  const punless = custom ? all.filter((l) => !/\b(como|igual que) (una|la|el) (luca|billete)\b/i.test(l)) : all
+  const list = punless.length ? punless : all
   return list[seed % list.length]
     .replace(/\{name\}/g, userName ? ` ${userName}` : '')
     .replace(/\{bot\}/g, prefs.botName || DEFAULT_BOT_NAME)

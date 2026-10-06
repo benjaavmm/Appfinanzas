@@ -261,7 +261,7 @@ export default function Assistant() {
     <div className="flex min-h-[calc(100dvh-9rem)] flex-col">
       <PageHeader
         title={prefs.botName!}
-        subtitle={`${persona.emoji} ${persona.label} · responde con tus datos, sin internet`}
+        subtitle={`${persona.emoji} ${persona.label} · sin internet`}
         actions={
           <>
             <IconButton label="Personalidad" onClick={() => setEditing((e) => !e)}>
@@ -287,7 +287,7 @@ export default function Assistant() {
             </div>
             <div className="pl-10">
               <Chips
-                items={[...hello.suggestions!, 'Dame un consejo', '¿Me alcanza para unas zapatillas de 60 lucas?']}
+                items={[...hello.suggestions!.slice(0, 4), '¿Me alcanza para unas zapatillas de 60 lucas?', 'Dame un consejo']}
                 onPick={send}
               />
             </div>
