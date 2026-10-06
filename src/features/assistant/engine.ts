@@ -34,32 +34,12 @@ import { normalizeText } from '../../lib/format'
 import { generateInsights, healthScore, monthStats } from '../../lib/insights'
 import { monthlyEquivalent, upcomingCharges } from '../../lib/recurring'
 import { cardSummary } from '../../lib/credit'
-import type { SheetState } from '../../lib/ui'
 import type { Category, DateStr, FinanceData, Transaction } from '../../lib/types'
 import { findAmount, fold } from '../quick/amount'
 import { keywordCategory } from '../quick/keywords'
 
-export type Fmt = (n: number, opts?: { sign?: boolean }) => string
-
-export interface ReplyRow {
-  label: string
-  value: string
-  tone?: 'good' | 'bad' | 'muted'
-  icon?: string
-  /** Segunda línea más chica */
-  sub?: string
-}
-
-export type ReplyAction = { label: string } & ({ kind: 'sheet'; sheet: SheetState } | { kind: 'nav'; to: string })
-
-export interface Reply {
-  /** Texto con **negritas** */
-  text: string
-  rows?: ReplyRow[]
-  txs?: Transaction[]
-  actions?: ReplyAction[]
-  suggestions?: string[]
-}
+export type { Fmt, Reply, ReplyAction, ReplyRow } from './types'
+import type { Fmt, Reply, ReplyRow } from './types'
 
 /** Lo que recuerda de la pregunta anterior para entender "¿y el mes pasado?" */
 export interface ChatMemory {
