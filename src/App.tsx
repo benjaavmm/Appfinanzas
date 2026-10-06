@@ -30,6 +30,34 @@ import Friends from './pages/Friends'
 import Assistant from './pages/Assistant'
 
 const LOCK_AFTER_MS = 60_000
+const ACTIVE_KEY = 'mf-last-active'
+
+/**
+ * Al recargar (p. ej. deslizando hacia abajo) la app se reinicia, pero si estabas usándola
+ * hace menos de un minuto no te vuelve a pedir el PIN. Se guarda solo en esta pestaña.
+ */
+const wasRecentlyActive = () => {
+  try {
+    const t = Number(sessionStorage.getItem(ACTIVE_KEY))
+    return t > 0 && Date.now() - t < LOCK_AFTER_MS
+  } catch {
+    return false
+  }
+}
+const markActive = () => {
+  try {
+    sessionStorage.setItem(ACTIVE_KEY, String(Date.now()))
+  } catch {
+    /* sin almacenamiento: se pedirá el PIN */
+  }
+}
+const clearActive = () => {
+  try {
+    sessionStorage.removeItem(ACTIVE_KEY)
+  } catch {
+    /* nada */
+  }
+}
 
 /**
  * Las pantallas cambian al instante, sin animación de página. En algunos Android
@@ -127,8 +155,28 @@ export default function App() {
   useApplyTheme()
   const onboarded = useStore((s) => s.settings.onboarded)
   const pinHash = useStore((s) => s.settings.pinHash)
-  const [unlocked, setUnlocked] = useState(false)
+  const [unlocked, setUnlocked] = useState(wasRecentlyActive)
   const hiddenAt = useRef<number | null>(null)
+
+  // Sin PIN la app está abierta; si se pone un PIN después, no se bloquea en ese momento
+  useEffect(() => {
+    if (hydrated && !pinHash) setUnlocked(true)
+  }, [hydrated, pinHash])
+
+  // Mientras está desbloqueada se marca como activa (al ocultarse, al cerrar y cada 15 s)
+  useEffect(() => {
+    if (!unlocked) return clearActive()
+    markActive()
+    const mark = () => markActive()
+    const id = window.setInterval(() => document.visibilityState === 'visible' && markActive(), 15_000)
+    window.addEventListener('pagehide', mark)
+    document.addEventListener('visibilitychange', mark)
+    return () => {
+      window.clearInterval(id)
+      window.removeEventListener('pagehide', mark)
+      document.removeEventListener('visibilitychange', mark)
+    }
+  }, [unlocked])
 
   // Cuenta en la nube: recién cuando los datos locales están cargados (si no, se pisarían)
   useEffect(() => {

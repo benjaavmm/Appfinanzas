@@ -13,6 +13,8 @@ interface AuthState {
   profile: Profile | null
   /** Volvió desde el correo de "recuperar contraseña": hay que pedir la nueva */
   recovering: boolean
+  /** Entró recién con un link del correo (sirve para quitar el PIN olvidado) */
+  fromEmailLink: boolean
 }
 
 export const useAuth = create<AuthState>()(() => ({
@@ -21,6 +23,7 @@ export const useAuth = create<AuthState>()(() => ({
   email: null,
   profile: null,
   recovering: false,
+  fromEmailLink: false,
 }))
 
 type Listener = (userId: string | null) => void
@@ -83,8 +86,10 @@ export const initAuth = (force = false): Promise<void> => {
           }
         }, 0)
       })
+      const cameFromLink = new URLSearchParams(window.location.search).has('code')
       const { data } = await sb.auth.getSession()
       applySession(data.session)
+      if (cameFromLink && data.session) useAuth.setState({ fromEmailLink: true })
       const err = new URLSearchParams(window.location.search).get('error_description')
       if (err) {
         const url = new URL(window.location.href)
@@ -138,6 +143,13 @@ export const signUp = async (p: { email: string; password: string; username: str
   // Si el correo ya existe, Supabase responde sin error pero sin identidades
   if (data.user && data.user.identities?.length === 0) throw new Error('Ya existe una cuenta con ese correo. Inicia sesión.')
   return !data.session
+}
+
+/** Confirmar que eres tú con la contraseña de la cuenta (para quitar un PIN olvidado) */
+export const verifyPassword = async (password: string) => {
+  const email = useAuth.getState().email
+  if (!email) throw new Error('No hay una cuenta iniciada en este dispositivo.')
+  await signIn(email, password)
 }
 
 export const sendMagicLink = (email: string) =>

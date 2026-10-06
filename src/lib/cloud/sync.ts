@@ -30,6 +30,9 @@ function readMeta(): SyncMeta | null {
     return null
   }
 }
+/** Cuenta con la que se respaldó este dispositivo (null si nunca se usó una) */
+export const syncedUserId = () => readMeta()?.userId ?? null
+
 const writeMeta = (m: SyncMeta) => {
   try {
     localStorage.setItem(META_KEY, JSON.stringify(m))
@@ -42,6 +45,32 @@ const snapshot = (): FinanceData => {
   const d = selectData(useStore.getState())
   const { pinHash: _pin, ...settings } = d.settings
   return { ...d, settings: settings as FinanceData['settings'] }
+}
+
+/** "Android · Chrome", "Windows · Edge"… (la base acepta hasta 80 letras) */
+const deviceLabel = () => {
+  const ua = navigator.userAgent
+  const os = /android/i.test(ua)
+    ? 'Android'
+    : /iphone|ipad/i.test(ua)
+      ? 'iPhone'
+      : /windows/i.test(ua)
+        ? 'Windows'
+        : /mac os/i.test(ua)
+          ? 'Mac'
+          : /linux/i.test(ua)
+            ? 'Linux'
+            : 'Otro'
+  const browser = /edg\//i.test(ua)
+    ? 'Edge'
+    : /chrome|crios/i.test(ua)
+      ? 'Chrome'
+      : /firefox|fxios/i.test(ua)
+        ? 'Firefox'
+        : /safari/i.test(ua)
+          ? 'Safari'
+          : 'Navegador'
+  return `${os} · ${browser}`.slice(0, 80)
 }
 
 let applying = false
@@ -57,7 +86,7 @@ const push = async (userId: string) => {
       user_id: userId,
       data: snapshot(),
       updated_at: new Date().toISOString(),
-      device: navigator.userAgent.slice(0, 120),
+      device: deviceLabel(),
     })
     .select('updated_at')
     .single()
@@ -145,4 +174,8 @@ export const startSync = () => {
     if (useAuth.getState().userId) void syncNow()
   })
   window.addEventListener('online', () => void syncNow())
+  // Con la app abierta en dos equipos, se revisa cada minuto si hay cambios del otro
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible' && useAuth.getState().userId) void syncNow()
+  }, 60_000)
 }

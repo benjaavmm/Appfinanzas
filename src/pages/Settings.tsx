@@ -332,7 +332,11 @@ export default function Settings() {
             <PinPad
               key="new"
               title="Elige un PIN de 4 dígitos"
-              subtitle="Si lo olvidas tendrás que borrar los datos de la app."
+              subtitle={
+                signedIn
+                  ? 'Si lo olvidas, lo quitas con la contraseña de tu cuenta.'
+                  : 'Si lo olvidas tendrás que borrar los datos (o iniciar sesión con tu cuenta).'
+              }
               onComplete={(p) => {
                 setFirstPin(p)
                 setPinStep('confirm')

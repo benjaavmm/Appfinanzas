@@ -5,7 +5,10 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-const url = import.meta.env.VITE_SUPABASE_URL
+// Por si se pegó la URL de la API con /rest/v1/ al final
+const url = import.meta.env.VITE_SUPABASE_URL?.trim()
+  .replace(/\/(rest|auth)\/v1\/?$/, '')
+  .replace(/\/+$/, '')
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const cloudConfigured = Boolean(url && key)
@@ -40,6 +43,7 @@ export const cloudError = (e: unknown): string => {
   if (m.includes('failed to fetch') || m.includes('network')) return 'Sin conexión. Revisa tu internet.'
   if (m.includes('not_found')) return 'No encontramos a esa persona.'
   if (m.includes('invalid_transition')) return 'Ese cambio ya no es posible (puede que el otro ya lo haya actualizado).'
+  if (m.includes('violates check constraint')) return 'Un dato no tiene el formato esperado. Actualiza la app e intenta de nuevo.'
   if (m.includes('row-level security')) return 'Solo puedes registrar préstamos con amigos que te aceptaron.'
   if (m.includes('self_request')) return 'No puedes agregarte a ti mismo 🙂'
   return msg
