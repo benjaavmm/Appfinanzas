@@ -173,12 +173,7 @@ export interface Settings {
   /** RUT de comercio → nombre que el usuario le dio (aprendido al escanear boletas) */
   merchantNames?: Record<string, string>
   /** Asistente: nombre y personalidad */
-  assistant?: {
-    name?: string
-    personality?: string
-    /** IA (Claude) por Supabase: apagada, solo cuando el asistente no sabe, o siempre */
-    ai?: 'off' | 'smart' | 'always'
-  }
+  assistant?: { name?: string; personality?: string }
 }
 
 export interface FinanceData {

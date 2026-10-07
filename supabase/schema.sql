@@ -236,30 +236,3 @@ grant execute on function public.find_profile(text) to authenticated;
 grant execute on function public.send_friend_request(uuid) to authenticated;
 grant execute on function public.loan_transition(uuid, text) to authenticated;
 grant execute on function public.are_friends(uuid, uuid) to authenticated;
-
--- ═══════════════════════ Asistente con IA (opcional) ═══════════════════════
--- Cuenta cuántos mensajes manda cada persona por día a la IA, para poner un límite
--- y que el costo no se dispare. Solo se modifica a través de assistant_hit().
-
-create table if not exists public.assistant_usage (
-  user_id uuid not null references auth.users (id) on delete cascade,
-  day date not null default current_date,
-  count integer not null default 0,
-  primary key (user_id, day)
-);
-alter table public.assistant_usage enable row level security;
-revoke all on public.assistant_usage from anon, authenticated;
-
-create or replace function public.assistant_hit()
-returns integer language plpgsql security definer set search_path = public as $$
-declare me uuid := auth.uid(); n integer;
-begin
-  if me is null then raise exception 'not_authenticated'; end if;
-  insert into assistant_usage (user_id, day, count) values (me, current_date, 1)
-  on conflict (user_id, day) do update set count = assistant_usage.count + 1
-  returning count into n;
-  return n;
-end;
-$$;
-revoke all on function public.assistant_hit() from public, anon;
-grant execute on function public.assistant_hit() to authenticated;

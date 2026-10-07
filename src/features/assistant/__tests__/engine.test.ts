@@ -297,21 +297,6 @@ describe('¿por qué?', () => {
   })
 })
 
-describe('resumen para la IA', () => {
-  it('incluye cuentas, mes, categorías, préstamos y movimientos, y no es gigante', async () => {
-    const { buildContext } = await import('../context')
-    const c = buildContext(data, today, fmt)
-    for (const s of ['## Cuentas', '## Este mes', '## Gasto por categoría', '## Últimos movimientos']) expect(c).toContain(s)
-    expect(c.length).toBeLessThan(24001)
-  })
-  it('decide cuándo vale la pena la IA', async () => {
-    const { needsAi } = await import('../ai')
-    expect(needsAi('¿por qué gasto tanto en delivery?', 'spent')).toBe(true)
-    expect(needsAi('xyz', 'unknown')).toBe(true)
-    expect(needsAi('¿cuánto gasté en comida?', 'spent')).toBe(false)
-  })
-})
-
 describe('¿puedo comprar…? (análisis completo)', () => {
   it('cuadra las cuentas: fin de mes = plata + sueldo que falta − comprometido − día a día', async () => {
     const { analyzePurchase } = await import('../afford')
