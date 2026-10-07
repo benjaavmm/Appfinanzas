@@ -68,14 +68,14 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
     label: 'Buena onda',
     description: 'Cercano y bien chileno, con modismos suaves y harta buena onda.',
     emoji: '😎',
-    sample: '¡Wena! Este mes vas bacán, todavía te quedan hartas lucas 😎',
+    sample: '¡Wena! Este mes vas piolita, todavía te quedan hartas lucas 😎',
     lines: {
       greet: [
         '¡Wena{name}! 😎 Soy {bot}, ¿en qué te ayudo hoy?',
         '¡Hola{name}! ¿Cómo va esa billetera? Soy {bot}, pregúntame lo que quieras.',
         '¡Wena, wena{name}! Aquí {bot}, listo para revisar tus lucas.',
         '¡Qué onda{name}! Soy {bot}. ¿Vemos cómo vas este mes?',
-        '¡Hola{name}! 👋 {bot} al tiro para ayudarte con tus finanzas.',
+        '¡Hola{name}! 👋 {bot} Ready para ayudarte con tus finanzas.',
         '¡Wena{name}! ¿Qué quieres saber de tu plata hoy?',
         '¡Holi{name}! Soy {bot}, tu yunta de las finanzas. ¿Partimos?',
       ],
@@ -93,12 +93,12 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
         'Uf, hay que ponerse las pilas.',
         'Mmm, ojo con esto.',
         'Cuidado ahí 😬',
-        'Uf, esto no pinta bien.',
+        'Uf, esto no tiene buena pinta.',
         'Hay que apretar un poquito.',
       ],
       closer: [
         '¿Te ayudo con algo más?',
-        'Cualquier cosa, me preguntas al tiro.',
+        'Cualquier cosa, me preguntas.',
         '¿Cachai? Si quieres, vemos otra cosa.',
         'Si quieres, te digo en qué gastas más.',
         'Aquí estoy para lo que necesites 😎',
@@ -139,8 +139,8 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
       bye: [
         '¡Chao{name}! Cuídate y cuida esas lucas 😎',
         '¡Nos vemos! Aquí estaré cuando me necesites.',
-        '¡Chao po! Que te vaya bacán.',
-        '¡Hasta pronto! Ojo con el delivery 😜',
+        '¡Chao pescao! Que te vaya bien.',
+        '¡Hasta pronto! Ojito con el delivery 😜',
         '¡Chaíto! Vuelve cuando quieras.',
         '¡Nos vemos{name}! Que tengas un buen día.',
       ],
@@ -220,7 +220,7 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
       ],
       affordTight: [
         'Alcanza, pero justito 😬',
-        'Sí, pero quedas al filo.',
+        'Sí, pero quedas al borde.',
         'Te alcanza, pero ojo ahí 👀',
         'Justo, justo… piénsalo bien.',
         'Alcanza, pero te deja apretado.',
@@ -267,7 +267,7 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
         'Puedes preguntarme por tus presupuestos o metas cuando quieras.',
       ],
       notUnderstood: [
-        'No logré entender la pregunta. ¿Puedes reformularla?',
+        'No logré entender la pregunta. ¿Puedes reformularla más simple?',
         'Disculpa, no entendí. Prueba con algo como "¿cuánto gasté este mes?".',
         'No tengo una respuesta para eso. Puedo ayudarte con gastos, presupuestos, metas, préstamos y suscripciones.',
         'No identifiqué lo que necesitas. ¿Me lo dices de otra forma?',
@@ -400,7 +400,7 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
         '¡Vamos, vas excelente!',
         '¡Bien! Eso es disciplina.',
         '¡Golazo!',
-        '¡Así se entrena!',
+        '¡Así se hace!',
         '¡Bravo, sigue así!',
       ],
       bad: [
@@ -422,7 +422,7 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
       notUnderstood: [
         'No te entendí. ¡Repítelo con más claridad, que tú puedes!',
         'Esa no la caché. Prueba con "¿cómo voy este mes?" y partimos.',
-        'Mmm, no entendí la jugada. ¿Me la explicas de otra forma?',
+        'Mmm, no entendí. ¿Me la explicas de otra forma?',
         'No te seguí. Pregúntame por gastos, presupuestos, metas o préstamos.',
         'Esa pelota se fue afuera. ¿Lo intentamos de nuevo?',
       ],
@@ -448,7 +448,7 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
         'Hola{name}, soy {bot}. Tú pones el esfuerzo y yo te muestro el marcador.',
       ],
       bye: [
-        '¡Chao{name}! Mañana seguimos entrenando 💪',
+        '¡Chao{name}! Luego seguimos 💪',
         '¡Nos vemos! Recuerda: disciplina todos los días.',
         '¡Hasta pronto! No aflojes con el presupuesto.',
         '¡Chao! Y anota cada gasto, ¿ya?',
@@ -573,14 +573,14 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
         'Respira hondo antes de leer.',
       ],
       closer: [
-        '¿Te ayudo con otra cosa? Gratis, como debe ser.',
+        '¿Te ayudo con otra cosita? como debe ser.',
         '¿Seguimos? Prometo más números y menos drama.',
         'Si quieres, te digo en qué gastas más (bajo tu propio riesgo 😅).',
         '¿Otra pregunta? Estoy más disponible que las ofertas del cyber.',
         'Aquí sigo, que yo no cobro por consulta 🤡',
       ],
       notUnderstood: [
-        'No entendí ni jota 🤡 ¿Me lo dices de otra forma?',
+        'No entendí nadita 🤡 ¿Me lo dices de otra forma?',
         'Eso me sonó a letra chica: no entendí nada. ¿Lo repites?',
         'Error 404: pregunta no encontrada 😅 Prueba con "¿cuánto gasté en comida?".',
         'Me quedé pegado como cajero sin red. ¿Me lo explicas más fácil?',
@@ -613,7 +613,7 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
         '¡Nos vemos! Saluda a tu billetera de mi parte.',
         '¡Chao! Si te tienta el delivery, acuérdate de mí 🤡',
         '¡Hasta la próxima! Yo me quedo cuidando los números.',
-        '¡Chao, chao! Que el fin de mes te sea leve.',
+        '¡Chao, chao! Que el fin de mes no duela.',
       ],
       compliment: [
         '¡Gracias! Lo anoto como ingreso emocional 💸',
@@ -651,7 +651,7 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
         'Hice una dieta y bajé harto… pero de la cuenta corriente, por el delivery.',
       ],
       motivate: [
-        '¡Ánimo! Si tu billetera sobrevivió al cyber, tú puedes con todo.',
+        '¡Ánimo! Si tu billetera sobrevivió al finde, tú puedes con todo.',
         'Ahorrar es como ir al gimnasio: cuesta partir, pero después te encanta el resultado.',
         'Tranqui, nadie nace sabiendo hacer presupuestos. Ni yo, y soy asistente de finanzas 🤡',
         'Cada luca que no gastas en delivery te guiña el ojo desde tu meta de ahorro.',
