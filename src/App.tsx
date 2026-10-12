@@ -29,6 +29,8 @@ import LockScreen from './pages/LockScreen'
 import Account from './pages/Account'
 import Friends from './pages/Friends'
 import Assistant from './pages/Assistant'
+import BankAuto from './pages/BankAuto'
+import { startInbox } from './lib/cloud/inbox'
 
 const LOCK_AFTER_MS = 60_000
 const ACTIVE_KEY = 'mf-last-active'
@@ -96,6 +98,7 @@ const AppRoutes = () => {
       <Route path="/cuenta" element={<Account />} />
       <Route path="/amigos" element={<Friends />} />
       <Route path="/asistente" element={<Assistant />} />
+      <Route path="/automatico" element={<BankAuto />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
@@ -250,6 +253,7 @@ export default function App() {
     if (!hydrated) return
     startSync()
     startSocial()
+    startInbox()
     void initAuth()
   }, [hydrated])
 

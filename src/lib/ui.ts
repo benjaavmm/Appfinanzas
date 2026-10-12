@@ -1,6 +1,15 @@
 import { create } from 'zustand'
 import type { ID, LoanDirection, Transaction, TxType } from './types'
 
+/** Un aviso del banco que llegó al buzón automático (Supabase) */
+export interface InboxItem {
+  id: string
+  body: string
+  /** "android", "iphone", "correo"… */
+  source?: string | null
+  receivedAt: string
+}
+
 export interface Toast {
   id: number
   message: string
@@ -41,6 +50,11 @@ export type SheetState =
   | { kind: 'split' }
   /** Detalle de una tarjeta de crédito */
   | { kind: 'card'; id: ID }
+  /**
+   * Agregar movimientos desde notificaciones o correos del banco: con `text` parte leyendo ese
+   * texto (pegado o compartido); con `inbox`, revisa los que llegaron solos (modo automático)
+   */
+  | { kind: 'bank'; text?: string; inbox?: InboxItem[] }
 
 interface UIState {
   toasts: Toast[]

@@ -156,6 +156,12 @@ export interface ReminderSettings {
   cards?: boolean
   /** Días de anticipación para cobros (0 = el mismo día) */
   daysBefore: number
+  /** Recordatorio diario para anotar/ordenar las finanzas */
+  daily?: boolean
+  /** Hora preferida del recordatorio diario (0-23, hora local) */
+  dailyHour?: number
+  /** Resumen semanal (domingo) y de fin/inicio de mes */
+  weekly?: boolean
 }
 
 export interface Settings {
@@ -172,6 +178,11 @@ export interface Settings {
   reminders?: ReminderSettings
   /** RUT de comercio → nombre que el usuario le dio (aprendido al escanear boletas) */
   merchantNames?: Record<string, string>
+  /**
+   * Movimientos desde notificaciones o correos del banco: qué cuenta de la app corresponde a
+   * cada tarjeta o banco. Claves como "card:1234" o "bank:santander:credito".
+   */
+  bankLinks?: Record<string, ID>
   /** Asistente: nombre y personalidad */
   assistant?: { name?: string; personality?: string }
 }

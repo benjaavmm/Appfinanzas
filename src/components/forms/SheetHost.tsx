@@ -10,6 +10,7 @@ import { ImportSheet } from '../../features/import/ImportSheet'
 import { QuickAddSheet } from '../../features/quick/QuickAddSheet'
 import { SplitSheet } from '../../features/split/SplitSheet'
 import { CardSheet } from '../../features/cards/CardSheet'
+import { BankSheet } from '../../features/bank/BankSheet'
 
 /** Renderiza la hoja activa y la mantiene montada durante la animación de cierre */
 export const SheetHost = () => {
@@ -54,5 +55,7 @@ export const SheetHost = () => {
       return <SplitSheet key={key} {...props} />
     case 'card':
       return <CardSheet key={key} {...props} id={s.id} />
+    case 'bank':
+      return <BankSheet key={key} {...props} text={s.text} inbox={s.inbox} />
   }
 }
