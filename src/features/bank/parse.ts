@@ -6,7 +6,18 @@
 import type { DateStr } from '../../lib/types'
 
 export type BankKind =
-  'compra' | 'transferencia_recibida' | 'transferencia_enviada' | 'pago' | 'giro' | 'abono' | 'cargo' | 'devolucion' | 'otro'
+  | 'compra'
+  | 'transferencia_recibida'
+  | 'transferencia_enviada'
+  | 'pago'
+  /** Pago de tu propia tarjeta de crédito desde tu cuenta (no es gasto: es una transferencia) */
+  | 'pago_tarjeta'
+  /** Giro en cajero (pasa plata de la cuenta al efectivo) */
+  | 'giro'
+  | 'abono'
+  | 'cargo'
+  | 'devolucion'
+  | 'otro'
 
 export interface BankMovement {
   /** Sentido para la app: gasto (sale plata) o ingreso (entra plata) */

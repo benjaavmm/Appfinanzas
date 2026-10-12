@@ -10,10 +10,15 @@ export interface BankDraft {
   key: string
   movement: BankMovement
   date: string
-  type: 'expense' | 'income'
+  /** Pagos de tarjeta y giros en cajero son transferencias entre tus cuentas */
+  type: 'expense' | 'income' | 'transfer'
   amount: number
   place: string
   accountId?: ID
+  /** Cuenta de destino si es transferencia (tarjeta que se paga, efectivo en un giro) */
+  toAccountId?: ID
+  /** El monto viene en otra moneda (p. ej. USD): hay que escribir cuánto fue en tu moneda */
+  foreign?: boolean
   categoryId?: ID
   /** Ya hay un movimiento igual (mismo monto y tipo, fecha ±1 día, misma cuenta) */
   duplicate: boolean
@@ -39,7 +44,8 @@ export const draftToTx = (d: BankDraft): Omit<Transaction, 'id' | 'createdAt'> =
   amount: d.amount,
   date: d.date,
   accountId: d.accountId ?? '',
-  categoryId: d.categoryId,
+  toAccountId: d.type === 'transfer' ? d.toAccountId : undefined,
+  categoryId: d.type === 'transfer' ? undefined : d.categoryId,
   place: d.place || undefined,
 })
 
