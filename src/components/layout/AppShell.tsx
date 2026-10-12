@@ -2,6 +2,7 @@ import { motion } from 'motion/react'
 import type { ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router'
 import {
+  BellRing,
   ChartPie,
   CircleUser,
   Users,
@@ -36,6 +37,7 @@ export const NAV = [
   { to: '/metas', label: 'Metas de ahorro', icon: PiggyBank },
   { to: '/cuentas', label: 'Cuentas', icon: Landmark },
   { to: '/categorias', label: 'Categorías', icon: Tags },
+  { to: '/automatico', label: 'Avisos del banco', icon: BellRing },
   ...(cloudConfigured
     ? [
         { to: '/amigos', label: 'Amigos', icon: Users },
@@ -62,6 +64,7 @@ const MORE_ROUTES = [
   '/metas',
   '/cuentas',
   '/categorias',
+  '/automatico',
   '/ajustes',
   '/amigos',
   '/cuenta',

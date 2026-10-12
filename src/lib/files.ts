@@ -36,6 +36,18 @@ export const pruneReceipts = async (inUse: Set<string>): Promise<number> => {
 
 export const putSharedFile = (file: Blob): Promise<void> => set(SHARED_FILE_KEY, file, store)
 
+/** Texto recibido por "Compartir → Mis Finanzas" (un correo o notificación del banco) */
+export const SHARED_TEXT_KEY = 'compartido-texto'
+
+export const putSharedText = (text: string): Promise<void> => set(SHARED_TEXT_KEY, text.slice(0, 20000), store)
+
+/** Entrega el texto compartido (si hay) y lo elimina */
+export const takeSharedText = async (): Promise<string | undefined> => {
+  const text = await get<string>(SHARED_TEXT_KEY, store)
+  if (text !== undefined) await del(SHARED_TEXT_KEY, store)
+  return text
+}
+
 /** Entrega la imagen compartida (si hay) y la elimina */
 export const takeSharedFile = async (): Promise<Blob | undefined> => {
   const file = await get<Blob>(SHARED_FILE_KEY, store)

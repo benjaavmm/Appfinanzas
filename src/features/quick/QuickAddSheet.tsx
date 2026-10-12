@@ -1,6 +1,6 @@
 import { motion } from 'motion/react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { AudioLines, Mic, Pencil, Sparkles, X } from 'lucide-react'
+import { AudioLines, BellRing, Mic, Pencil, Sparkles, X } from 'lucide-react'
 import { daysBetween, fmtDate } from '../../lib/dates'
 import { useCurrency, useMoney, useToday, vibrate } from '../../lib/hooks'
 import { learnPlace } from '../../lib/insights'
@@ -9,6 +9,7 @@ import { openSheet, toast } from '../../lib/ui'
 import { Button, Chip, cx, IconBadge } from '../../components/ui'
 import { Sheet } from '../../components/ui/Sheet'
 import { parseQuickText } from './parse'
+import { looksLikeBankText } from '../bank/parse'
 import { useDictation } from './speech'
 
 type Props = { open: boolean; onClose: () => void; text?: string; voice?: boolean }
@@ -311,6 +312,16 @@ export const QuickAddSheet = ({ open, onClose, text: initialText, voice }: Props
           <p className="rounded-2xl bg-warn-soft px-3.5 py-2.5 text-sm font-medium text-warn" role="status">
             {notice}
           </p>
+        )}
+        {/* Pegaron una notificación o un correo del banco: se lee mejor con el lector del banco */}
+        {!listening && text.length > 25 && looksLikeBankText(text, today) && (
+          <button
+            type="button"
+            onClick={() => openSheet({ kind: 'bank', text })}
+            className="flex w-full items-center gap-2 rounded-2xl bg-info-soft px-3.5 py-2.5 text-left text-sm font-semibold text-info"
+          >
+            <BellRing className="size-4 shrink-0" /> Parece un aviso de tu banco: tócalo para leerlo completo
+          </button>
         )}
 
         {text.trim() ? (

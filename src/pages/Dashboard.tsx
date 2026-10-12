@@ -5,9 +5,11 @@ import {
   ArrowDownLeft,
   ArrowLeftRight,
   ArrowUpRight,
+  BellRing,
   Camera,
   Eye,
   EyeOff,
+  FileUp,
   HandCoins,
   Plus,
   Settings,
@@ -170,7 +172,7 @@ export default function Dashboard() {
           </Link>
 
           {/* Acciones rápidas */}
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
             {[
               {
                 label: 'Gasto',
@@ -191,6 +193,12 @@ export default function Dashboard() {
                 cls: 'text-[var(--series-current)]',
               },
               {
+                label: 'Aviso del banco',
+                icon: BellRing,
+                onClick: () => openSheet({ kind: 'bank' }),
+                cls: 'text-[var(--series-current)]',
+              },
+              {
                 label: 'Dividir cuenta',
                 icon: Split,
                 onClick: () => openSheet({ kind: 'split' }),
@@ -203,6 +211,7 @@ export default function Dashboard() {
                 cls: 'text-info',
               },
               { label: 'Préstamo', icon: HandCoins, onClick: () => openSheet({ kind: 'loan' }), cls: 'text-brand' },
+              { label: 'Cartola', icon: FileUp, onClick: () => openSheet({ kind: 'import' }), cls: 'text-ink-2' },
             ].map((a) => (
               <motion.button
                 key={a.label}

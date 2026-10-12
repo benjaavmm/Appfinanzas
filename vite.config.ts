@@ -93,12 +93,12 @@ export default defineConfig({
           },
           { name: 'Préstamos', short_name: 'Préstamos', url: './#/prestamos', icons: [{ src: 'pwa-192.png', sizes: '192x192' }] },
         ],
-        // "Compartir → Mis Finanzas" desde la galería o WhatsApp con la foto de una boleta
+        // "Compartir → Mis Finanzas": la foto de una boleta, o el texto de un correo o notificación del banco
         share_target: {
           action: './compartir',
           method: 'POST',
           enctype: 'multipart/form-data',
-          params: { files: [{ name: 'boleta', accept: ['image/*'] }] },
+          params: { title: 'title', text: 'text', url: 'url', files: [{ name: 'boleta', accept: ['image/*'] }] },
         },
       },
     }),

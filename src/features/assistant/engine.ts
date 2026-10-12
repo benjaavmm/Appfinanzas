@@ -43,6 +43,7 @@ import { keywordCategory } from '../quick/keywords'
 export type { Fmt, Reply, ReplyAction, ReplyRow } from './types'
 import type { Fmt, Reply, ReplyRow } from './types'
 import { affordReply, readInstallments } from './afford'
+import { looksLikeBankText } from '../bank/parse'
 import { APP_KNOWLEDGE, FINANCE_KNOWLEDGE, type KnowledgeEntry } from './knowledge'
 import { DEFAULT_BOT_NAME, DEFAULT_PERSONALITY, PERSONALITIES, type Moment, type PersonalityId } from './personality'
 
@@ -1518,6 +1519,14 @@ export const answer = (
       text: `${L('greet') || `¡Hola${userName ? ` ${userName}` : ''}! 👋`}\n\n${CAPABILITIES}`,
       suggestions: STARTER_SUGGESTIONS,
       kind: 'greet',
+    })
+
+  // Pegaron una notificación o un correo del banco: se ofrece agregarlo
+  if (question.length > 25 && looksLikeBankText(question, today))
+    return done({
+      text: 'Esto parece un aviso de tu banco 👀. Revisa que esté bien y lo agrego:',
+      actions: [{ label: '🏦 Revisar y agregar', kind: 'sheet', sheet: { kind: 'bank', text: question } }],
+      kind: 'bank',
     })
 
   // "¿Por qué?": se explica la respuesta anterior

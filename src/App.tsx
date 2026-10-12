@@ -5,7 +5,10 @@ import { useApplyTheme, useHydrated } from './lib/hooks'
 import { useBoot, useStore } from './lib/store'
 import { forceUpdate } from './lib/pwa'
 import { openSheet, toast } from './lib/ui'
-import { pruneReceipts, takeSharedFile } from './lib/files'
+import { pruneReceipts, takeSharedFile, takeSharedText } from './lib/files'
+import { looksLikeBankText } from './features/bank/parse'
+import { fetchPendingInbox } from './lib/cloud/inbox'
+import { todayStr } from './lib/dates'
 import { checkRemindersNow } from './features/reminders/notify'
 import { initAuth } from './lib/cloud/auth'
 import { startSync } from './lib/cloud/sync'
@@ -112,7 +115,8 @@ const LaunchActions = () => {
   const { pathname, search } = useLocation()
   const navigate = useNavigate()
   useEffect(() => {
-    const accion = new URLSearchParams(search).get('accion')
+    const params = new URLSearchParams(search)
+    const accion = params.get('accion')
     if (!accion) return
     navigate({ pathname, search: '' }, { replace: true })
     switch (accion) {
@@ -133,6 +137,23 @@ const LaunchActions = () => {
         break
       case 'importar':
         openSheet({ kind: 'import' })
+        break
+      // Texto compartido desde otra app: si es un aviso del banco se lee como movimiento
+      case 'texto-compartido':
+        void takeSharedText().then((text) => {
+          if (!text?.trim()) return
+          openSheet(looksLikeBankText(text, todayStr()) ? { kind: 'bank', text } : { kind: 'quick', text })
+        })
+        break
+      // Enlace directo (p. ej. desde una automatización): #/?accion=banco&texto=…
+      case 'banco':
+        openSheet({ kind: 'bank', text: params.get('texto') ?? undefined })
+        break
+      // Revisar lo que llegó al buzón automático
+      case 'revisar-banco':
+        void fetchPendingInbox()
+          .then((inbox) => openSheet(inbox.length ? { kind: 'bank', inbox } : { kind: 'bank' }))
+          .catch(() => openSheet({ kind: 'bank' }))
         break
       case 'asistente':
         navigate('/asistente', { replace: true })
