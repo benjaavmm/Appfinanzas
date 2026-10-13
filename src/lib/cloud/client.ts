@@ -11,6 +11,10 @@ const url = import.meta.env.VITE_SUPABASE_URL?.trim()
   .replace(/\/+$/, '')
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+/** Dirección y clave pública del proyecto (las usa el modo automático desde MacroDroid / Atajos) */
+export const supabaseUrl = url ?? ''
+export const supabaseAnonKey = key ?? ''
+
 export const cloudConfigured = Boolean(url && key)
 export const googleEnabled = cloudConfigured && import.meta.env.VITE_SUPABASE_GOOGLE === '1'
 

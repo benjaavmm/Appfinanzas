@@ -236,3 +236,120 @@ grant execute on function public.find_profile(text) to authenticated;
 grant execute on function public.send_friend_request(uuid) to authenticated;
 grant execute on function public.loan_transition(uuid, text) to authenticated;
 grant execute on function public.are_friends(uuid, uuid) to authenticated;
+
+-- ═══════════════════════ Buzón automático del banco ═══════════════════════
+-- Los avisos del banco (notificación en Android, correo o SMS en iPhone) llegan solos desde
+-- MacroDroid o Atajos con una clave personal, y la app los ofrece para agregar.
+
+-- Una clave secreta por usuario (la que se pega en MacroDroid / Atajos)
+create table if not exists public.inbox_keys (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  key text not null unique check (char_length(key) >= 32),
+  created_at timestamptz not null default now()
+);
+
+-- Avisos recibidos: quedan "pendientes" hasta que se agregan o descartan en la app
+create table if not exists public.bank_inbox (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  body text not null check (char_length(body) between 1 and 4000),
+  source text check (char_length(source) <= 40),
+  received_at timestamptz not null default now(),
+  status text not null default 'pending' check (status in ('pending', 'added', 'dismissed'))
+);
+create index if not exists bank_inbox_user_status on public.bank_inbox (user_id, status, received_at);
+
+-- Clave nueva, larga y aleatoria (gen_random_uuid usa el generador seguro de Postgres)
+create or replace function public.inbox_new_key()
+returns text language sql volatile set search_path = public as $$
+  select 'mf_' || left(replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''), 40);
+$$;
+
+-- Tu clave (se crea la primera vez)
+create or replace function public.my_inbox_key()
+returns text language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); k text;
+begin
+  if me is null then raise exception 'not_authenticated'; end if;
+  insert into inbox_keys (user_id, key) values (me, inbox_new_key()) on conflict (user_id) do nothing;
+  select i.key into k from inbox_keys i where i.user_id = me;
+  return k;
+end;
+$$;
+
+-- Clave nueva: la anterior deja de funcionar
+create or replace function public.rotate_inbox_key()
+returns text language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); k text;
+begin
+  if me is null then raise exception 'not_authenticated'; end if;
+  insert into inbox_keys as i (user_id, key) values (me, inbox_new_key())
+    on conflict (user_id) do update set key = excluded.key, created_at = now()
+    returning i.key into k;
+  return k;
+end;
+$$;
+
+-- Lo llaman MacroDroid o Atajos con la clave pública de Supabase (sin sesión): la clave dice de quién es
+create or replace function public.inbox_add(key text, body text, source text default null)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  uid uuid;
+  b text := left(regexp_replace(coalesce(inbox_add.body, ''), '^\s+|\s+$', '', 'g'), 4000);
+  s text := nullif(left(btrim(coalesce(inbox_add.source, '')), 40), '');
+begin
+  -- Se bloquea la clave: si llegan dos avisos iguales a la vez, el segundo espera y se ignora
+  select k.user_id into uid from inbox_keys k where k.key = btrim(inbox_add.key) for update;
+  if uid is null then raise exception 'invalid_key'; end if;
+  if b = '' then raise exception 'empty_body'; end if;
+  -- Limpieza con el primer aviso de cada día: revisados hace más de 30 días y pendientes de más de 90
+  if not exists (select 1 from bank_inbox x where x.user_id = uid and x.received_at >= date_trunc('day', now())) then
+    delete from bank_inbox x where x.user_id = uid and (
+      (x.status <> 'pending' and x.received_at < now() - interval '30 days') or x.received_at < now() - interval '90 days'
+    );
+  end if;
+  -- Límite contra abusos (si alguien consigue tu clave, genera una nueva en la app)
+  if (select count(*) from bank_inbox x where x.user_id = uid and x.received_at > now() - interval '1 day') >= 300 then
+    raise exception 'too_many_messages';
+  end if;
+  -- Las apps a veces mandan el mismo aviso dos veces
+  if exists (select 1 from bank_inbox x where x.user_id = uid and x.body = b and x.received_at > now() - interval '2 minutes') then
+    return 'duplicate';
+  end if;
+  insert into bank_inbox (user_id, body, source) values (uid, b, s);
+  return 'ok';
+end;
+$$;
+
+alter table public.inbox_keys enable row level security;
+alter table public.bank_inbox enable row level security;
+
+-- Clave: solo ves la tuya (se crea y cambia con las funciones)
+drop policy if exists inbox_keys_select on public.inbox_keys;
+create policy inbox_keys_select on public.inbox_keys for select to authenticated using (user_id = auth.uid());
+
+-- Avisos: solo los tuyos. No hay insert directo: entran por inbox_add
+drop policy if exists bank_inbox_select on public.bank_inbox;
+create policy bank_inbox_select on public.bank_inbox for select to authenticated using (user_id = auth.uid());
+drop policy if exists bank_inbox_update on public.bank_inbox;
+create policy bank_inbox_update on public.bank_inbox for update to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists bank_inbox_delete on public.bank_inbox;
+create policy bank_inbox_delete on public.bank_inbox for delete to authenticated using (user_id = auth.uid());
+
+-- De un aviso solo se cambia el estado (agregado / descartado)
+revoke all on public.inbox_keys, public.bank_inbox from anon, authenticated;
+grant select on public.inbox_keys to authenticated;
+grant select, delete on public.bank_inbox to authenticated;
+grant update (status) on public.bank_inbox to authenticated;
+
+revoke all on function public.inbox_new_key() from public, anon, authenticated;
+revoke all on function public.my_inbox_key() from public, anon;
+revoke all on function public.rotate_inbox_key() from public, anon;
+revoke all on function public.inbox_add(text, text, text) from public;
+grant execute on function public.my_inbox_key() to authenticated;
+grant execute on function public.rotate_inbox_key() to authenticated;
+grant execute on function public.inbox_add(text, text, text) to anon, authenticated;
+
+-- Para que la API vea las funciones nuevas al tiro
+notify pgrst, 'reload schema';
