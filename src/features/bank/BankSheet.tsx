@@ -18,7 +18,7 @@ import {
 import { Button, cx, Field, Input, Segmented, Textarea } from '../../components/ui'
 import { AccountChips, AmountInput } from '../../components/ui/pickers'
 import { Sheet } from '../../components/ui/Sheet'
-import { markInbox } from '../../lib/cloud/inbox'
+import { clearInbox } from '../../lib/cloud/inbox'
 import { daysBetween, fmtDateShort, todayStr } from '../../lib/dates'
 import { formatMoney, plural } from '../../lib/format'
 import { useMoney, useToday, vibrate, type MoneyFmt } from '../../lib/hooks'
@@ -495,12 +495,9 @@ export const BankSheet = ({ open, onClose, text, inbox }: Props) => {
   )
   const dupCount = drafts.filter((d) => d.duplicate).length
 
-  const settleInbox = (addedIds: Set<string>) => {
-    if (!inbox?.length) return
-    const added = inbox.filter((i) => addedIds.has(i.id)).map((i) => i.id)
-    const dismissed = inbox.filter((i) => !addedIds.has(i.id)).map((i) => i.id)
-    if (added.length) markInbox(added, 'added').catch(() => {})
-    if (dismissed.length) markInbox(dismissed, 'dismissed').catch(() => {})
+  // Los avisos revisados (agregados o no) se borran del buzón
+  const settleInbox = () => {
+    if (inbox?.length) clearInbox(inbox.map((i) => i.id)).catch(() => {})
   }
 
   const add = () => {
@@ -509,7 +506,7 @@ export const BankSheet = ({ open, onClose, text, inbox }: Props) => {
     const created = st.addTransactions(chosen.map((d) => draftToTx(d, st.accounts)))
     const links = accountLinksFrom(drafts)
     if (Object.keys(links).length) st.updateSettings({ bankLinks: { ...(st.settings.bankLinks ?? {}), ...links } })
-    settleInbox(new Set(chosen.map((d) => d.inboxId).filter((x): x is string => !!x)))
+    settleInbox()
     vibrate(14)
     const ids = new Set(created.map((t) => t.id))
     toast({
@@ -527,7 +524,7 @@ export const BankSheet = ({ open, onClose, text, inbox }: Props) => {
   }
 
   const dismissAll = () => {
-    settleInbox(new Set())
+    settleInbox()
     toast({ message: 'Avisos descartados', tone: 'info' })
     onClose()
   }

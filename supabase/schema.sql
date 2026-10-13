@@ -297,16 +297,22 @@ declare
   uid uuid;
   b text := left(regexp_replace(coalesce(inbox_add.body, ''), '^\s+|\s+$', '', 'g'), 4000);
   s text := nullif(left(btrim(coalesce(inbox_add.source, '')), 40), '');
+  t text;
 begin
   -- Se bloquea la clave: si llegan dos avisos iguales a la vez, el segundo espera y se ignora
   select k.user_id into uid from inbox_keys k where k.key = btrim(inbox_add.key) for update;
   if uid is null then raise exception 'invalid_key'; end if;
   if b = '' then raise exception 'empty_body'; end if;
-  -- Limpieza con el primer aviso de cada día: revisados hace más de 30 días y pendientes de más de 90
+  -- Claves dinámicas y códigos del banco (sin un monto) no se guardan nunca
+  t := translate(lower(b), 'áéíóúü', 'aeiouu');
+  if t ~ '(clave dinamica|superclave|super clave|digipass|multipass|coordenadas|codigo de (verificacion|seguridad|confirmacion|acceso|validacion)|codigo otp|\motp\M|\mtoken\M|clave (de un solo uso|temporal|de acceso|de transaccion)|tu codigo|ingresa (el|este) codigo|es tu (codigo|clave))'
+     and t !~ '(\$|\mclp\M|\musd\M|\mpesos\M)' then
+    return 'ignored';
+  end if;
+  -- Limpieza con el primer aviso de cada día: los ya revisados y los pendientes de más de 90 días
+  -- (la app borra cada aviso apenas lo revisas; esto es por si quedó alguno)
   if not exists (select 1 from bank_inbox x where x.user_id = uid and x.received_at >= date_trunc('day', now())) then
-    delete from bank_inbox x where x.user_id = uid and (
-      (x.status <> 'pending' and x.received_at < now() - interval '30 days') or x.received_at < now() - interval '90 days'
-    );
+    delete from bank_inbox x where x.user_id = uid and (x.status <> 'pending' or x.received_at < now() - interval '90 days');
   end if;
   -- Límite contra abusos (si alguien consigue tu clave, genera una nueva en la app)
   if (select count(*) from bank_inbox x where x.user_id = uid and x.received_at > now() - interval '1 day') >= 300 then

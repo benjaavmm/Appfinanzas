@@ -3,6 +3,9 @@
  * o Atajos en iPhone) y la app los ofrece para agregar ("👀 Ojito, llegaron movimientos").
  */
 import { create } from 'zustand'
+import { parseBankText } from '../../features/bank/parse'
+import { todayStr } from '../dates'
+import type { DateStr } from '../types'
 import { openSheet, toast, useUI, type InboxItem } from '../ui'
 import { cloudConfigured, cloudError, supabase, supabaseAnonKey, supabaseUrl } from './client'
 import { onUserChange, useAuth } from './auth'
@@ -30,6 +33,17 @@ export const toInboxItem = (r: InboxRow): InboxItem => ({
   source: r.source,
   receivedAt: r.received_at,
 })
+
+/** Separa los avisos con un movimiento de los que no traen nada (claves, promociones, saldos…) */
+export const splitInbox = (items: InboxItem[], today: DateStr) => {
+  const movements: InboxItem[] = []
+  const junk: string[] = []
+  for (const i of items) {
+    if (parseBankText(i.body, today).length) movements.push(i)
+    else junk.push(i.id)
+  }
+  return { movements, junk }
+}
 
 /** Los que todavía no se avisaron en este dispositivo */
 export const unseenItems = (items: InboxItem[], seen: readonly string[]) => {
@@ -94,16 +108,23 @@ export const fetchPendingInbox = async (): Promise<InboxItem[]> => {
     if (useAuth.getState().userId === me) useInbox.setState({ error: message })
     throw new Error(message)
   }
-  const items = (data as InboxRow[]).map(toInboxItem)
-  if (useAuth.getState().userId === me) useInbox.setState({ pending: items, loaded: true, error: null })
-  return items
+  const { movements, junk } = splitInbox((data as InboxRow[]).map(toInboxItem), todayStr())
+  // Lo que no es un movimiento no se muestra ni se guarda: se borra al tiro
+  if (junk.length)
+    void sb
+      .from('bank_inbox')
+      .delete()
+      .in('id', junk)
+      .then(() => undefined)
+  if (useAuth.getState().userId === me) useInbox.setState({ pending: movements, loaded: true, error: null })
+  return movements
 }
 
-/** Marca avisos como agregados o descartados */
-export const markInbox = async (ids: string[], status: 'added' | 'dismissed'): Promise<void> => {
+/** Borra los avisos ya revisados (agregados o descartados): no queda copia en la nube */
+export const clearInbox = async (ids: string[]): Promise<void> => {
   if (!ids.length || !cloudConfigured || !useAuth.getState().userId) return
   const sb = await supabase()
-  const { error } = await sb.from('bank_inbox').update({ status }).in('id', ids)
+  const { error } = await sb.from('bank_inbox').delete().in('id', ids)
   if (error) throw new Error(inboxError(error))
   const done = new Set(ids)
   useInbox.setState((s) => ({ pending: s.pending.filter((p) => !done.has(p.id)) }))

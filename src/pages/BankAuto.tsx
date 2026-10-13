@@ -325,6 +325,10 @@ const AutoSetup = () => {
                   <b>Disparador:</b> Notificación → <b>Notificación recibida</b> → elige las apps de tu banco (puedes marcar
                   varias).
                 </p>
+                <p>
+                  En el texto de la notificación elige <b>Contiene</b> y escribe <Code>$</Code>: así solo se mandan avisos con
+                  montos, nunca tus claves dinámicas.
+                </p>
                 <p className="text-xs text-muted">
                   MacroDroid te pedirá permiso para leer notificaciones: acéptalo. Elige solo las apps del banco, así no se manda
                   nada más.
@@ -377,6 +381,9 @@ const AutoSetup = () => {
                 <p>
                   Abre <b>Atajos</b> → <b>Automatización</b> → <b>Nueva automatización</b> → <b>Correo</b> (elige el remitente del
                   banco) o <b>Mensaje</b> (el número o nombre del banco).
+                </p>
+                <p>
+                  En <b>Mensaje contiene</b> escribe <Code>$</Code>, así solo se mandan avisos con montos.
                 </p>
                 <p className="text-xs text-muted">
                   Marca <b>Ejecutar de inmediato</b> para que no te pregunte cada vez.
@@ -501,12 +508,16 @@ export default function BankAuto() {
             <ShieldCheck className="mt-0.5 size-5 shrink-0 text-good" />
             <div className="space-y-2">
               <p>
-                El texto de cada aviso queda en tu cuenta de Supabase y <b>solo tú lo ves</b> (ni tus amigos). Los que ya
-                revisaste se borran solos a los 30 días, y los que nunca revises, a los 90.
+                Cada aviso espera en tu cuenta de Supabase hasta que lo revisas y <b>solo tú lo ves</b> (ni tus amigos). Apenas lo
+                agregas o lo descartas, se borra; los que nunca revises, a los 90 días.
               </p>
               <p>
-                Tu clave personal solo sirve para dejar avisos en tu buzón, no para leerlos. Si crees que alguien la tiene, genera
-                una nueva.
+                Las claves dinámicas y códigos del banco no se guardan nunca, y lo que no es un movimiento (promociones, saldos)
+                se borra al tiro.
+              </p>
+              <p>
+                Tu clave personal solo sirve para dejar avisos en tu buzón: no deja leerlos ni ver tus datos. No compartas tu
+                macro ni tu atajo (llevan la clave) y, si crees que alguien la tiene, genera una nueva.
               </p>
             </div>
           </div>

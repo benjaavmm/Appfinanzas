@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inboxError, inboxMessage, toInboxItem, unseenItems } from '../inbox'
+import { inboxError, inboxMessage, splitInbox, toInboxItem, unseenItems } from '../inbox'
 
 const item = (id: string) => ({ id, body: `aviso ${id}`, receivedAt: '2026-10-12T15:00:00Z' })
 
@@ -11,6 +11,20 @@ describe('buzón automático', () => {
       source: 'android',
       receivedAt: '2026-10-12T15:00:00Z',
     }))
+
+  it('deja fuera claves, promociones y saldos (solo quedan movimientos)', () => {
+    const at = '2026-10-13T12:00:00Z'
+    const items = [
+      { id: 'compra', body: 'Santander: Compra por $4.990 en STARBUCKS con tarjeta terminada en 1234', receivedAt: at },
+      { id: 'clave', body: 'BancoEstado: Tu clave dinámica es 482913. No la compartas con nadie.', receivedAt: at },
+      { id: 'autoriza', body: 'Para autorizar tu compra por $50.000 en FALABELLA ingresa el código 123456', receivedAt: at },
+      { id: 'promo', body: '¡Aprovecha! 30% de descuento en restaurantes pagando con tu tarjeta', receivedAt: at },
+      { id: 'saldo', body: 'Tu saldo disponible es $120.000', receivedAt: at },
+    ]
+    const { movements, junk } = splitInbox(items, '2026-10-13')
+    expect(movements.map((i) => i.id)).toEqual(['compra'])
+    expect(junk).toEqual(['clave', 'autoriza', 'promo', 'saldo'])
+  })
 
   it('solo avisa los que no se habían avisado', () => {
     expect(unseenItems([item('a'), item('b'), item('c')], ['a', 'c']).map((i) => i.id)).toEqual(['b'])
