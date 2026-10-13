@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 /**
  * Service worker propio:
- * - Precarga la app para que funcione sin conexión y se actualiza sola.
+ * - Precarga la app para que funcione sin conexión; la versión nueva espera al botón "Actualizar".
  * - Guarda en caché, la primera vez que se usan, los archivos pesados del lector de boletas.
  * - Recibe imágenes y textos compartidos desde otras apps ("Compartir → Mis Finanzas").
  * - Muestra recordatorios en segundo plano (Periodic Background Sync, Chrome Android).
@@ -19,7 +19,15 @@ import type { FinanceData } from './lib/types'
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<string | { url: string; revision: string | null }> }
 
-self.skipWaiting()
+// La versión nueva espera a que toques "Actualizar" en el aviso de la app, así no se recarga de
+// golpe a mitad de algo. Las versiones antiguas de la app no tienen ese aviso: con ellas se
+// instala sola, como antes. La app crea esta caché para decir que sí lo tiene (src/lib/update.ts).
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.has('mf-aviso-actualizacion').then((prompt) => (prompt ? undefined : self.skipWaiting())))
+})
+self.addEventListener('message', (event) => {
+  if ((event.data as { type?: string } | null)?.type === 'SKIP_WAITING') void self.skipWaiting()
+})
 clientsClaim()
 cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)

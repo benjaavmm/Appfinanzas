@@ -20,6 +20,7 @@ import { CURRENCIES } from '../lib/format'
 import { fmtDate, toDateStr } from '../lib/dates'
 import { useData } from '../lib/hooks'
 import { forceUpdate, isIOS, promptInstall, usePwa } from '../lib/pwa'
+import { applyUpdate, useUpdate } from '../lib/update'
 import { useStore } from '../lib/store'
 import { useAuth } from '../lib/cloud/auth'
 import { ask, openSheet, toast } from '../lib/ui'
@@ -46,6 +47,7 @@ export default function Settings() {
   const signedIn = useAuth((s) => s.status === 'signedIn')
   const importData = useStore((s) => s.importData)
   const resetAll = useStore((s) => s.resetAll)
+  const updateReady = useUpdate((s) => s.ready)
   const installEvent = usePwa((s) => s.installEvent)
   const installed = usePwa((s) => s.installed)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -313,17 +315,24 @@ export default function Settings() {
               {new Date(__APP_BUILD__.time).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
               <br />
               {data.transactions.length} movimientos guardados en este dispositivo
+              {updateReady && (
+                <>
+                  <br />
+                  <span className="font-semibold text-brand">✨ Hay una versión nueva lista</span>
+                </>
+              )}
             </p>
             <Button
               size="sm"
-              variant="secondary"
+              variant={updateReady ? 'primary' : 'secondary'}
               icon={<RotateCcw className="size-4" />}
               onClick={() => {
+                if (updateReady) return applyUpdate()
                 toast({ message: 'Buscando la última versión…', tone: 'info' })
                 void forceUpdate()
               }}
             >
-              Actualizar app
+              {updateReady ? 'Instalar versión nueva' : 'Actualizar app'}
             </Button>
           </div>
         </Card>

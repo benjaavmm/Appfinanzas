@@ -4,6 +4,7 @@ import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'r
 import { useApplyTheme, useHydrated } from './lib/hooks'
 import { useBoot, useStore } from './lib/store'
 import { forceUpdate } from './lib/pwa'
+import { checkUpdated } from './lib/update'
 import { openSheet, toast } from './lib/ui'
 import { pruneReceipts, takeSharedFile, takeSharedText } from './lib/files'
 import { looksLikeBankText } from './features/bank/parse'
@@ -15,7 +16,7 @@ import { startSync } from './lib/cloud/sync'
 import { startSocial } from './lib/cloud/social'
 import { AppShell } from './components/layout/AppShell'
 import { SheetHost } from './components/forms/SheetHost'
-import { ConfirmDialog, Toaster } from './components/ui/Overlays'
+import { ConfirmDialog, Toaster, UpdateBanner } from './components/ui/Overlays'
 import Dashboard from './pages/Dashboard'
 import Transactions from './pages/Transactions'
 import Insights from './pages/Insights'
@@ -276,6 +277,7 @@ export default function App() {
     startSocial()
     startInbox()
     void initAuth()
+    if (checkUpdated()) toast({ message: '✨ Listo, ya tienes la versión nueva de Mis Finanzas' })
   }, [hydrated])
 
   // Registra los cobros automáticos vencidos al abrir y al volver a la app
@@ -308,6 +310,7 @@ export default function App() {
     }
   }, [hydrated])
 
+  const inApp = hydrated && onboarded && !(pinHash && !unlocked)
   let content
   if (!hydrated) content = <Splash />
   else if (pinHash && !unlocked) content = <LockScreen onUnlock={() => setUnlocked(true)} />
@@ -326,7 +329,7 @@ export default function App() {
   return (
     <MotionConfig reducedMotion="user">
       <ErrorBoundary>{content}</ErrorBoundary>
-      <Toaster />
+      <Toaster>{inApp && <UpdateBanner />}</Toaster>
       <ConfirmDialog />
     </MotionConfig>
   )

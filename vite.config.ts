@@ -42,7 +42,8 @@ export default defineConfig({
       ],
     }),
     VitePWA({
-      registerType: 'autoUpdate',
+      // La versión nueva espera a que el usuario toque "Actualizar" (src/lib/update.ts)
+      registerType: 'prompt',
       // El registro se hace en src/main.tsx
       injectRegister: false,
       // Service worker propio (recordatorios y "compartir hacia la app"): src/sw.ts

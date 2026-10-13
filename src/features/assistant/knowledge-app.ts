@@ -797,9 +797,10 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     title: 'Actualizar la app',
     answer:
-      'La app se actualiza sola cuando la abres con internet. Si ves algo raro o quieres la última versión al tiro, ve a **Ajustes** y toca **Actualizar app** (abajo, en **Zona de pruebas**): se recarga **sin borrar tus datos**.',
+      'Cuando hay una versión nueva, la app te avisa abajo con **✨ Hay una versión nueva**: toca **Actualizar** y se recarga **sin borrar tus datos**. Si cierras la app del todo, también se actualiza sola al abrirla. Si ves algo raro, en **Ajustes** está el botón **Actualizar app** (abajo, en **Zona de pruebas**).',
     steps: [
-      'Ve a **Más → Ajustes**.',
+      'Si te sale el aviso **Hay una versión nueva**, toca **Actualizar**.',
+      'Si no, ve a **Más → Ajustes**.',
       'Baja hasta **Zona de pruebas** y toca **Actualizar app**.',
       'Ahí mismo ves la **Versión** y la fecha en que se publicó.',
     ],
