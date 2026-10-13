@@ -244,6 +244,7 @@ export const sanitizeData = (r: Record<string, unknown>, version: number): Sanit
   const rem = isObj(s.reminders) ? s.reminders : undefined
   const names = isObj(s.merchantNames) ? s.merchantNames : undefined
   const ai = isObj(s.assistant) ? s.assistant : undefined
+  const links = isObj(s.bankLinks) ? s.bankLinks : undefined
   const defaultAccountId = str(s.defaultAccountId)
 
   const settings: Settings = {
@@ -265,12 +266,20 @@ export const sanitizeData = (r: Record<string, unknown>, version: number): Sanit
             budgets: bool(rem.budgets) ?? true,
             cards: bool(rem.cards),
             daysBefore: intIn(rem.daysBefore, 0, 30) ?? 1,
+            daily: bool(rem.daily),
+            dailyHour: intIn(rem.dailyHour, 0, 23),
+            weekly: bool(rem.weekly),
           })
         : undefined,
       merchantNames: names
         ? Object.fromEntries(Object.entries(names).filter((e): e is [string, string] => typeof e[1] === 'string'))
         : undefined,
       assistant: ai ? clean({ name: str(ai.name), personality: str(ai.personality) }) : undefined,
+      bankLinks: links
+        ? Object.fromEntries(
+            Object.entries(links).filter((e): e is [string, string] => typeof e[1] === 'string' && e[0].length <= 80),
+          )
+        : undefined,
     }) as Partial<Settings>),
     onboarded: true,
   }

@@ -103,7 +103,7 @@ describe('enableReminders', () => {
     const { sync, requestPermission } = setup({ permission: 'default', answer: 'granted' })
     expect(await enableReminders()).toEqual({ permission: 'granted', background: true })
     expect(requestPermission).toHaveBeenCalledOnce()
-    expect(sync.register).toHaveBeenCalledWith(SYNC_TAG, { minInterval: 12 * 60 * 60 * 1000 })
+    expect(sync.register).toHaveBeenCalledWith(SYNC_TAG, { minInterval: 60 * 60 * 1000 })
   })
 
   it('si se niega el permiso no registra nada', async () => {

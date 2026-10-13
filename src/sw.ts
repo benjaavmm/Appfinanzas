@@ -3,7 +3,7 @@
  * Service worker propio:
  * - Precarga la app para que funcione sin conexión y se actualiza sola.
  * - Guarda en caché, la primera vez que se usan, los archivos pesados del lector de boletas.
- * - Recibe imágenes compartidas desde otras apps ("Compartir → Mis Finanzas").
+ * - Recibe imágenes y textos compartidos desde otras apps ("Compartir → Mis Finanzas").
  * - Muestra recordatorios en segundo plano (Periodic Background Sync, Chrome Android).
  */
 import { clientsClaim } from 'workbox-core'
@@ -12,8 +12,8 @@ import { NavigationRoute, registerRoute } from 'workbox-routing'
 import { CacheFirst } from 'workbox-strategies'
 import { ExpirationPlugin } from 'workbox-expiration'
 import { createStore, get, set } from 'idb-keyval'
-import { computeReminders } from './features/reminders/compute'
-import { putSharedFile } from './lib/files'
+import { computeReminders, TIMED_KINDS } from './features/reminders/compute'
+import { putSharedFile, putSharedText } from './lib/files'
 import { toDateStr } from './lib/dates'
 import type { FinanceData } from './lib/types'
 
@@ -44,11 +44,23 @@ self.addEventListener('fetch', (event) => {
       try {
         const form = await event.request.formData()
         const file = form.getAll('boleta').find((f): f is File => f instanceof File && f.size > 0)
-        if (file) await putSharedFile(file)
+        if (file) {
+          await putSharedFile(file)
+          return Response.redirect(appUrl('./#/?accion=boleta-compartida'), 303)
+        }
+        // Texto: un correo o una notificación del banco compartida desde otra app
+        const text = ['title', 'text', 'url']
+          .map((k) => form.get(k))
+          .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+          .join('\n')
+        if (text) {
+          await putSharedText(text)
+          return Response.redirect(appUrl('./#/?accion=texto-compartido'), 303)
+        }
       } catch {
         /* si falla, la app abre igual */
       }
-      return Response.redirect(appUrl('./#/?accion=boleta-compartida'), 303)
+      return Response.redirect(appUrl('./'), 303)
     })(),
   )
 })
@@ -71,22 +83,28 @@ const readData = async (): Promise<FinanceData | null> => {
 const notifyReminders = async (): Promise<number> => {
   const data = await readData()
   if (!data?.settings?.reminders?.enabled) return 0
-  const today = toDateStr(new Date())
+  // La hora decide si ya corresponde el aviso diario y los resúmenes
+  const now = new Date()
+  const today = toDateStr(now)
   const sent = (await get<Record<string, string>>(NOTIFIED_KEY, metaStore)) ?? {}
   let shown = 0
-  for (const r of computeReminders(data, today)) {
+  for (const r of computeReminders(data, today, now)) {
     if (sent[r.id]) continue
-    await self.registration.showNotification(r.title, {
+    // Diario, semanal y del mes: una etiqueta por tipo, así el nuevo reemplaza al anterior (y vuelve a sonar)
+    const timed = TIMED_KINDS.has(r.kind)
+    const options: NotificationOptions & { renotify?: boolean } = {
       body: r.body,
-      tag: r.id,
+      tag: timed ? `recordatorio-${r.kind}` : r.id,
       icon: appUrl('./pwa-192.png'),
       data: { url: appUrl(`./${r.url}`) },
-    })
+      ...(timed ? { renotify: true } : {}),
+    }
+    await self.registration.showNotification(r.title, options)
     sent[r.id] = today
     shown++
   }
   // Olvida avisos de hace más de 60 días
-  const cutoff = toDateStr(new Date(Date.now() - 60 * 86_400_000))
+  const cutoff = toDateStr(new Date(now.getTime() - 60 * 86_400_000))
   for (const [k, d] of Object.entries(sent)) if (d < cutoff) delete sent[k]
   await set(NOTIFIED_KEY, sent, metaStore)
   return shown

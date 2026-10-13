@@ -13,8 +13,12 @@ export type { NotifyPermission, ReminderCapabilities } from './support'
 
 /** Etiqueta de la revisión periódica (la escucha src/sw.ts) */
 export const SYNC_TAG = 'recordatorios'
-/** Chrome decide cuándo correrla; esto es solo el mínimo entre revisiones */
-const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000
+/**
+ * Mínimo pedido entre revisiones: 1 hora, para que el recordatorio diario llegue cerca de la
+ * hora elegida. Chrome igual decide cuándo correrla (según cuánto se usa la app, puede ser
+ * bastante menos seguido).
+ */
+const MIN_INTERVAL_MS = 60 * 60 * 1000
 /** Al abrir o volver a la app se revisa a lo más una vez cada 30 min */
 export const CHECK_EVERY_MS = 30 * 60 * 1000
 const LAST_CHECK_KEY = 'mis-finanzas-recordatorios-revision'

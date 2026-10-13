@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { computeReminders, DEFAULT_REMINDERS, MAX_REMINDERS, reminderSettings } from '../compute'
+import { computeReminders, DEFAULT_REMINDERS, MAX_REMINDERS, reminderSettings, type Reminder } from '../compute'
+import { NUDGES } from '../nudges'
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from '../../../lib/defaults'
 import { buildDemoData } from '../../../lib/demo'
 import { addDaysStr, todayStr } from '../../../lib/dates'
@@ -401,5 +402,306 @@ describe('orden, tope y formato', () => {
     expect(rs.map((r) => r.title)).toContain('Pedro te debe $15.000 desde hace 8 días')
     // Los ids no se repiten
     expect(new Set(rs.map((r) => r.id)).size).toBe(rs.length)
+  })
+})
+
+/* ───────────────────────── Avisos con hora ───────────────────────── */
+
+/** Fecha y hora local: at('2026-10-05', 20) */
+const at = (date: string, hour: number, minute = 0) => {
+  const [y, m, d] = date.split('-').map(Number)
+  return new Date(y, m - 1, d, hour, minute)
+}
+
+const timed = (data: FinanceData, date: string, hour: number, minute = 0) =>
+  computeReminders(data, date, at(date, hour, minute)).filter((r) => ['daily', 'weekly', 'month'].includes(r.kind))
+
+const one = (data: FinanceData, date: string, hour: number, kind: Reminder['kind']) =>
+  timed(data, date, hour).find((r) => r.kind === kind)
+
+const text = (r?: Reminder) => `${r?.title} ${r?.body}`
+
+describe('ajustes del aviso diario y los resúmenes', () => {
+  it('por defecto: diario a las 20:00 y resúmenes activos', () => {
+    expect(DEFAULT_REMINDERS).toMatchObject({ daily: true, dailyHour: 20, weekly: true })
+    expect(reminderSettings({ enabled: true })).toMatchObject({ daily: true, dailyHour: 20, weekly: true })
+    expect(reminderSettings({ daily: false, weekly: false })).toMatchObject({ daily: false, weekly: false })
+  })
+
+  it('valida la hora entre 0 y 23', () => {
+    expect(reminderSettings({ dailyHour: 30 }).dailyHour).toBe(23)
+    expect(reminderSettings({ dailyHour: -1 }).dailyHour).toBe(0)
+    expect(reminderSettings({ dailyHour: 9.6 }).dailyHour).toBe(10)
+    expect(reminderSettings({ dailyHour: Number.NaN }).dailyHour).toBe(20)
+    expect(reminderSettings({ dailyHour: '9' as unknown as number }).dailyHour).toBe(20)
+  })
+
+  it('sin hora (now) no se calculan', () => {
+    expect(ids(make())).toEqual([])
+  })
+})
+
+describe('aviso diario', () => {
+  it('no sale antes de la hora elegida y sí después', () => {
+    const data = make()
+    expect(timed(data, TODAY, 19, 59)).toEqual([])
+    expect(timed(data, TODAY, 20).map((r) => r.id)).toEqual(['daily:2026-10-05'])
+    expect(timed(data, TODAY, 23, 59).map((r) => r.id)).toEqual(['daily:2026-10-05'])
+    const early = make({ reminders: { dailyHour: 9 } })
+    expect(timed(early, TODAY, 8)).toEqual([])
+    expect(timed(early, TODAY, 9).map((r) => r.id)).toEqual(['daily:2026-10-05'])
+  })
+
+  it('una vez por día: el id es el mismo todo el día y cambia al siguiente', () => {
+    const data = make()
+    expect(one(data, TODAY, 20, 'daily')?.id).toBe(one(data, TODAY, 23, 'daily')?.id)
+    expect(one(data, '2026-10-06', 21, 'daily')?.id).toBe('daily:2026-10-06')
+  })
+
+  it('respeta el interruptor', () => {
+    expect(timed(make({ reminders: { daily: false } }), TODAY, 21)).toEqual([])
+  })
+
+  it('sin movimientos ni cuentas no se manda', () => {
+    expect(timed(make({ accounts: [] }), TODAY, 21)).toEqual([])
+    // Con una cuenta (aunque no haya anotado nada) sí: es el empujón para partir
+    expect(one(make(), TODAY, 21, 'daily')).toBeDefined()
+  })
+
+  it('si no anotó nada hoy: empujoncito para anotar, abre "nuevo gasto"', () => {
+    const data = make({ transactions: [expense(5000, 'c-comida', '2026-10-04')] })
+    const r = one(data, TODAY, 21, 'daily')
+    expect(r?.url).toBe('#/?accion=gasto')
+    const titles = NUDGES.amigo.notLogged.title.map((t) => t.split('{')[0])
+    expect(titles.some((t) => r?.title.startsWith(t))).toBe(true)
+  })
+
+  it('si anotó: mini resumen con el promedio diario, abre Movimientos', () => {
+    const data = make({
+      transactions: [expense(10000, 'c-comida', '2026-10-01'), expense(5000, 'c-comida'), expense(7500, 'c-super')],
+    })
+    const r = one(data, TODAY, 21, 'daily')
+    expect(r?.url).toBe('#/movimientos')
+    // Promedio de los 4 días anteriores (desde el primer gasto): 10.000 / 4
+    expect(r?.body).toContain('Hoy llevas $12.500 en 2 gastos; tu promedio diario es $2.500')
+  })
+
+  it('el texto cambia según si anotó o no', () => {
+    const none = one(make(), TODAY, 21, 'daily')
+    const logged = one(make({ transactions: [expense(5000, 'c-comida')] }), TODAY, 21, 'daily')
+    expect(none?.id).toBe(logged?.id)
+    expect(text(none)).not.toBe(text(logged))
+    expect(logged?.body).toContain('Hoy llevas $5.000 en 1 gasto')
+  })
+
+  it('el primer día no inventa un promedio', () => {
+    const r = one(make({ transactions: [expense(5000, 'c-comida')] }), TODAY, 21, 'daily')
+    expect(r?.body).not.toContain('promedio')
+  })
+
+  it('los cobros automáticos de suscripciones no cuentan como "anotó"', () => {
+    const auto = { ...expense(7990, 'c-suscripciones'), subscriptionId: 's1' }
+    expect(one(make({ transactions: [auto] }), TODAY, 21, 'daily')?.url).toBe('#/?accion=gasto')
+  })
+
+  it('varios días sin anotar: "hace N días que no anotas nada"', () => {
+    const r = one(make({ transactions: [expense(5000, 'c-comida', '2026-10-02')] }), TODAY, 21, 'daily')
+    expect(text(r)).toContain('3 días')
+    expect(r?.url).toBe('#/?accion=gasto')
+    // Con 2 días todavía es el empujoncito normal
+    const two = one(make({ transactions: [expense(5000, 'c-comida', '2026-10-03')] }), TODAY, 21, 'daily')
+    expect(text(two)).not.toContain('2 días')
+  })
+
+  it('tras 2 semanas sin anotar avisa solo una vez por semana', () => {
+    const data = make({ transactions: [expense(5000, 'c-comida', '2026-09-14')] })
+    const sent = Array.from({ length: 14 }, (_, i) => addDaysStr('2026-09-28', i)).filter((d) => one(data, d, 21, 'daily'))
+    expect(sent).toEqual(['2026-09-28', '2026-10-05'])
+  })
+
+  it('en la mañana habla de ayer', () => {
+    const data = make({ reminders: { dailyHour: 9 }, transactions: [expense(5000, 'c-comida', '2026-10-04')] })
+    const r = one(data, TODAY, 9, 'daily')
+    expect(r?.id).toBe('daily:2026-10-05')
+    expect(r?.body).toContain('Ayer fueron $5.000 en 1 gasto')
+    expect(r?.url).toBe('#/movimientos')
+  })
+
+  it('de vez en cuando cambia el resumen por un dato útil', () => {
+    // Presupuesto del mes y gastos todos los días: hay datos útiles (presupuesto del día y racha)
+    const days = Array.from({ length: 20 }, (_, i) => addDaysStr('2026-10-01', i))
+    const data = make({ settings: { monthlyBudget: 600000 }, transactions: days.map((d) => expense(10000, 'c-comida', d)) })
+    const bodies = days.slice(4, 13).map((d) => one(data, d, 21, 'daily')?.body ?? '')
+    const tips = bodies.filter((b) => !b.includes('Hoy llevas'))
+    expect(tips).toHaveLength(3)
+    expect(tips.some((b) => /presupuesto diario|días seguidos anotando/.test(b))).toBe(true)
+    // Presupuesto del día: (600.000 − lo gastado antes) / días que quedan − lo de hoy
+    const all = days.map((d) => one(data, d, 21, 'daily')?.body ?? '').join(' ')
+    expect(all).toMatch(/Hoy aún te quedan \$[\d.]+ de tu presupuesto diario/)
+    expect(all).toMatch(/Llevas \d+ días seguidos anotando/)
+  })
+
+  it('la suscripción de mañana como dato útil, solo si no la avisan los cobros', () => {
+    const days = Array.from({ length: 6 }, (_, i) => addDaysStr('2026-10-01', i))
+    const bodies = (reminders: Partial<ReminderSettings>) =>
+      days.map((d) => {
+        const data = make({
+          reminders,
+          subscriptions: [sub({ nextDate: addDaysStr(d, 1) })],
+          transactions: [expense(5000, 'c-comida', d)],
+        })
+        return one(data, d, 21, 'daily')?.body ?? ''
+      })
+    // Avisos de cobros "mismo día": lo de mañana no sale por otro lado
+    expect(bodies({ daysBefore: 0 }).some((b) => b.includes('Mañana se cobra Netflix ($7.990)'))).toBe(true)
+    // Con 1 día de anticipación ya hay un aviso "Mañana se cobra…": no se repite
+    expect(bodies({ daysBefore: 1 }).some((b) => b.includes('Mañana se cobra'))).toBe(false)
+  })
+})
+
+describe('resumen semanal', () => {
+  const SUNDAY = '2026-10-11'
+  const weekData = (thisWeek: number, lastWeek: number) =>
+    make({
+      transactions: [
+        expense(lastWeek, 'c-comida', '2026-09-30'),
+        expense(thisWeek * 0.75, 'c-comida', '2026-10-06'),
+        expense(thisWeek * 0.25, 'c-ocio', '2026-10-09'),
+      ],
+    })
+
+  it('solo el domingo, desde la hora elegida', () => {
+    const data = weekData(80000, 100000)
+    const week = Array.from({ length: 7 }, (_, i) => addDaysStr(TODAY, i))
+    expect(week.filter((d) => one(data, d, 21, 'weekly'))).toEqual([SUNDAY])
+    expect(one(data, SUNDAY, 19, 'weekly')).toBeUndefined()
+    const r = one(data, SUNDAY, 20, 'weekly')
+    expect(r).toMatchObject({ id: 'weekly:2026-10-05', url: '#/analisis' })
+  })
+
+  it('semana buena: gastó menos que la anterior y dice dónde gastó más', () => {
+    const r = one(weekData(80000, 100000), SUNDAY, 21, 'weekly')
+    expect(r?.body).toContain(`Gastaste $80.000 esta semana, 20${NBSP}% menos que la anterior. Lo que más: Comida y delivery`)
+    expect(NUDGES.amigo.weekGood.title.map((t) => t.replace('{name}', ''))).toContain(r?.title)
+  })
+
+  it('semana mala: gastó bastante más', () => {
+    const r = one(weekData(150000, 100000), SUNDAY, 21, 'weekly')
+    expect(r?.body).toContain(`50${NBSP}% más que la anterior`)
+    expect(NUDGES.amigo.weekBad.title.map((t) => t.replace('{name}', ''))).toContain(r?.title)
+  })
+
+  it('sin gastos en la semana no hay resumen', () => {
+    expect(one(make({ transactions: [expense(5000, 'c-comida', '2026-09-30')] }), SUNDAY, 21, 'weekly')).toBeUndefined()
+  })
+
+  it('respeta el interruptor', () => {
+    expect(one(make({ ...weekData(80000, 100000), reminders: { weekly: false } }), SUNDAY, 21, 'weekly')).toBeUndefined()
+  })
+})
+
+describe('resumen del mes', () => {
+  const income = (amount: number, date: string): Transaction => ({ ...expense(amount, 'c-sueldo', date), type: 'income' })
+  const monthData = (inc: number, exp: number, prevExp = 1000000) =>
+    make({
+      transactions: [expense(prevExp, 'c-super', '2026-09-10'), income(inc, '2026-10-01'), expense(exp, 'c-super', '2026-10-15')],
+    })
+
+  it('solo el último día del mes (desde la hora) o el día 1', () => {
+    const data = monthData(1000000, 800000)
+    expect(one(data, '2026-10-30', 21, 'month')).toBeUndefined()
+    expect(one(data, '2026-10-31', 19, 'month')).toBeUndefined()
+    expect(one(data, '2026-10-31', 20, 'month')).toMatchObject({ id: 'month:2026-10', url: '#/analisis' })
+    // El día 1 (desde la mañana) habla del mes que terminó: mismo id, no se repite
+    expect(one(data, '2026-11-01', 8, 'month')).toBeUndefined()
+    expect(one(data, '2026-11-01', 10, 'month')?.id).toBe('month:2026-10')
+    expect(one(data, '2026-11-02', 21, 'month')).toBeUndefined()
+    expect(one(data, '2026-10-15', 21, 'month')).toBeUndefined()
+  })
+
+  it('mes con ahorro: ingresos − gastos y comparación con el mes anterior', () => {
+    const r = one(monthData(1000000, 800000), '2026-10-31', 21, 'month')
+    expect(r?.body).toContain(`En octubre te sobraron $200.000; tus gastos bajaron 20${NBSP}% frente a septiembre`)
+    expect(NUDGES.amigo.monthSaved.title.map((t) => t.replace('{name}', '').replace('{mes}', 'octubre'))).toContain(r?.title)
+  })
+
+  it('mes en rojo', () => {
+    const r = one(monthData(500000, 800000, 400000), '2026-10-31', 21, 'month')
+    expect(r?.body).toContain(
+      `En octubre gastaste $300.000 más de lo que entró; tus gastos subieron 100${NBSP}% frente a septiembre`,
+    )
+    expect(NUDGES.amigo.monthRed.title.map((t) => t.replace('{name}', '').replace('{mes}', 'octubre'))).toContain(r?.title)
+  })
+
+  it('sin movimientos en el mes no hay resumen', () => {
+    expect(one(make(), '2026-10-31', 21, 'month')).toBeUndefined()
+  })
+
+  it('respeta el interruptor de resúmenes', () => {
+    expect(one(make({ ...monthData(1, 2), reminders: { weekly: false } }), '2026-10-31', 21, 'month')).toBeUndefined()
+  })
+})
+
+describe('avisos con hora: orden, montos y personalidad', () => {
+  it('van al final y respetan el máximo', () => {
+    const data = make({ subscriptions: [sub()], transactions: [expense(5000, 'c-comida')] })
+    expect(computeReminders(data, TODAY, at(TODAY, 21)).map((r) => r.kind)).toEqual(['subscription', 'daily'])
+    // Con muchos avisos importantes, el diario queda fuera
+    const busy = make({
+      settings: { monthlyBudget: 100000 },
+      budgets: { 'c-comida': 50000, 'c-ocio': 100000 },
+      transactions: [expense(60000, 'c-comida'), expense(40000, 'c-ocio')],
+      subscriptions: [sub({ id: 'a' }), sub({ id: 'b', nextDate: '2026-10-01', autoRegister: false })],
+      loans: [loan({ id: 'x' }), loan({ id: 'y', dueDate: '2026-09-20' })],
+    })
+    const rs = computeReminders(busy, TODAY, at(TODAY, 21))
+    expect(rs).toHaveLength(MAX_REMINDERS)
+    expect(rs.some((r) => r.kind === 'daily')).toBe(false)
+  })
+
+  it('con "Ocultar montos" no muestran cifras', () => {
+    const data = make({
+      settings: { hideAmounts: true },
+      transactions: [
+        expense(10000, 'c-comida', '2026-10-01'),
+        expense(5000, 'c-comida', '2026-10-31'),
+        { ...expense(900000, 'c-sueldo', '2026-10-02'), type: 'income' },
+      ],
+    })
+    const daily = one(data, '2026-10-31', 21, 'daily')
+    const month = one(data, '2026-10-31', 21, 'month')
+    const sunday = make({ settings: { hideAmounts: true }, transactions: [expense(5000, 'c-comida', '2026-10-11')] })
+    const weekly = one(sunday, '2026-10-11', 21, 'weekly')
+    for (const r of [daily, month, weekly]) {
+      expect(r).toBeDefined()
+      expect(text(r)).not.toMatch(/\$|•/)
+    }
+    expect(daily?.body).toContain('Hoy llevas 1 gasto')
+    expect(month?.body).toContain('En octubre te sobró plata')
+  })
+
+  it('la personalidad del asistente cambia el texto, y usa el primer nombre', () => {
+    const base = { transactions: [expense(5000, 'c-comida')] }
+    const texts = (['amigo', 'profesional', 'coach', 'chistoso'] as const).map((personality) =>
+      text(one(make({ ...base, settings: { assistant: { personality } } }), TODAY, 21, 'daily')),
+    )
+    expect(new Set(texts).size).toBe(4)
+    // Sin personalidad: la de "amigo"
+    expect(text(one(make(base), TODAY, 21, 'daily'))).toBe(texts[0])
+    // Algún día de la semana el título lleva el nombre
+    const named = make({ settings: { userName: 'Benjamín Soto' } })
+    const titles = Array.from({ length: 7 }, (_, i) => one(named, addDaysStr(TODAY, i), 21, 'daily')?.title ?? '')
+    expect(titles.some((t) => t.includes('Benjamín') && !t.includes('Soto'))).toBe(true)
+  })
+
+  it('con los datos de ejemplo: ningún marcador sin reemplazar', () => {
+    const demo = buildDemoData('Cami')
+    demo.settings.reminders = { ...DEFAULT_REMINDERS, enabled: true, budgets: false, loans: false }
+    for (let i = 0; i < 35; i++) {
+      const d = addDaysStr(todayStr(), -i)
+      for (const r of computeReminders(demo, d, at(d, 22))) {
+        expect(text(r)).not.toMatch(/[{}]|undefined|NaN/)
+      }
+    }
   })
 })

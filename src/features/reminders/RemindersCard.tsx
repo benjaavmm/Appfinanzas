@@ -4,12 +4,15 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useNavigate } from 'react-router'
 import {
   Bell,
+  CalendarDays,
+  ChartColumn,
   ChevronRight,
   CircleAlert,
   CreditCard,
   CircleCheck,
   HandCoins,
   Info,
+  NotebookPen,
   PiggyBank,
   Repeat,
   Send,
@@ -20,7 +23,7 @@ import { useStore } from '../../lib/store'
 import { toast } from '../../lib/ui'
 import type { ReminderSettings } from '../../lib/types'
 import { Button, Card, cx, Field, Segmented, Toggle } from '../../components/ui'
-import { computeReminders, MAX_REMINDERS, reminderSettings, type Reminder } from './compute'
+import { computeReminders, MAX_REMINDERS, reminderSettings, TIMED_KINDS, type Reminder } from './compute'
 import {
   capabilities,
   checkRemindersSoon,
@@ -38,6 +41,11 @@ const DAYS_OPTIONS: { value: string; label: string }[] = [
   { value: '1', label: '1 día antes' },
   { value: '3', label: '3 días antes' },
 ]
+
+/** Horas para el recordatorio diario */
+const DAILY_HOURS = [9, 13, 18, 20, 22]
+
+const hourLabel = (h: number) => `${h}:00`
 
 const Row = ({ title, text, children }: { title: string; text?: string; children: ReactNode }) => (
   <div className="flex items-center gap-3 py-3">
@@ -84,6 +92,9 @@ const KIND_ICON: Record<Reminder['kind'], { icon: ReactNode; cls: string }> = {
   loan: { icon: <HandCoins className="size-4" />, cls: 'bg-warn-soft text-warn' },
   budget: { icon: <PiggyBank className="size-4" />, cls: 'bg-bad-soft text-bad' },
   card: { icon: <CreditCard className="size-4" />, cls: 'bg-info-soft text-info' },
+  daily: { icon: <NotebookPen className="size-4" />, cls: 'bg-good-soft text-good' },
+  weekly: { icon: <CalendarDays className="size-4" />, cls: 'bg-brand-soft text-brand' },
+  month: { icon: <ChartColumn className="size-4" />, cls: 'bg-good-soft text-good' },
 }
 
 export const RemindersCard = () => {
@@ -114,10 +125,19 @@ export const RemindersCard = () => {
   }, [refreshCaps])
 
   // Vista previa con los datos de hoy, aunque los recordatorios estén apagados
-  const preview = useMemo(
-    () => computeReminders({ ...data, settings: { ...data.settings, reminders: { ...prefs, enabled: true } } }, today),
-    [data, prefs, today],
-  )
+  const { preview, beforeHour } = useMemo(() => {
+    const now = new Date()
+    const early = now.getHours() < prefs.dailyHour
+    // Antes de la hora elegida se muestra igual el aviso diario que vendrá
+    if (early) now.setHours(prefs.dailyHour, 0, 0, 0)
+    const list = computeReminders({ ...data, settings: { ...data.settings, reminders: { ...prefs, enabled: true } } }, today, now)
+    return { preview: list, beforeHour: early }
+  }, [data, prefs, today])
+
+  // Si la hora guardada no es una de las opciones (p. ej. desde un respaldo), se agrega
+  const hourOptions = (
+    DAILY_HOURS.includes(prefs.dailyHour) ? DAILY_HOURS : [...DAILY_HOURS, prefs.dailyHour].sort((a, b) => a - b)
+  ).map((h) => ({ value: String(h), label: hourLabel(h) }))
 
   const save = (patch: Partial<ReminderSettings>) =>
     updateSettings({ reminders: { ...reminderSettings(useStore.getState().settings.reminders), ...patch } })
@@ -170,7 +190,10 @@ export const RemindersCard = () => {
     refreshCaps()
   }
 
-  const shown = preview.slice(0, PREVIEW_COUNT)
+  const first = preview.slice(0, PREVIEW_COUNT)
+  // El aviso diario (o un resumen) va al final por importancia: se muestra aunque haya varios otros
+  const timed = first.some((r) => TIMED_KINDS.has(r.kind)) ? undefined : preview.find((r) => TIMED_KINDS.has(r.kind))
+  const shown = timed ? [...first, timed] : first
   const extra = preview.length - shown.length
 
   return (
@@ -182,7 +205,8 @@ export const RemindersCard = () => {
         <div className="min-w-0 flex-1">
           <h2 className="font-bold">Recordatorios</h2>
           <p className="text-xs text-muted">
-            Te avisamos de cobros que se vienen, préstamos que vencen y presupuestos al límite.
+            Te avisamos de cobros que se vienen, préstamos que vencen y presupuestos al límite, y te damos un empujoncito diario
+            para ordenar tus finanzas.
           </p>
         </div>
         <Toggle checked={active} onChange={(v) => void onToggle(v)} label="Activar recordatorios" />
@@ -226,6 +250,33 @@ export const RemindersCard = () => {
                 options={DAYS_OPTIONS}
               />
             </Field>
+            <div className="mt-3 divide-y divide-line border-t border-line">
+              <div className="py-3">
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold">Recordatorio diario</p>
+                    <p className="text-xs text-muted">Te recordamos ordenar tus finanzas cada día a esta hora</p>
+                  </div>
+                  <Toggle checked={prefs.daily} onChange={(v) => save({ daily: v })} label="Recordatorio diario" />
+                </div>
+                {prefs.daily && (
+                  <Segmented
+                    size="sm"
+                    className="mt-2"
+                    value={String(prefs.dailyHour)}
+                    onChange={(v) => save({ dailyHour: Number(v) })}
+                    options={hourOptions}
+                  />
+                )}
+              </div>
+              <Row title="Resumen semanal y del mes" text="El domingo, cómo te fue en la semana; al cerrar el mes, si ahorraste">
+                <Toggle checked={prefs.weekly} onChange={(v) => save({ weekly: v })} label="Resumen semanal y del mes" />
+              </Row>
+            </div>
+            <p className="mt-1 text-[11px] leading-snug text-muted">
+              En Android, con la app instalada, llegan aunque esté cerrada, pero Chrome elige el momento exacto y pueden
+              atrasarse. En iPhone solo se ven al abrir la app.
+            </p>
             <Button
               variant="secondary"
               size="sm"
@@ -264,6 +315,9 @@ export const RemindersCard = () => {
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm leading-snug font-semibold break-words">{r.title}</span>
                     <span className="mt-0.5 block text-xs leading-snug text-muted">{r.body}</span>
+                    {r.kind === 'daily' && beforeHour && (
+                      <span className="mt-0.5 block text-[11px] text-muted">Hoy a las {hourLabel(prefs.dailyHour)}</span>
+                    )}
                   </span>
                   <ChevronRight className="mt-2 size-4 shrink-0 text-muted" aria-hidden />
                 </button>
