@@ -32,7 +32,8 @@ import {
   initialCapabilities,
   sendTestNotification,
 } from './notify'
-import { describeSupport, type SupportInfo, type SupportTone } from './support'
+import { describeSupport, PUSH_ON_TEXT, type SupportInfo, type SupportTone } from './support'
+import { syncPush, testPush, usePush, type PushStatus } from '../../lib/cloud/push'
 
 const PREVIEW_COUNT = 3
 
@@ -97,6 +98,43 @@ const KIND_ICON: Record<Reminder['kind'], { icon: ReactNode; cls: string }> = {
   month: { icon: <ChartColumn className="size-4" />, cls: 'bg-good-soft text-good' },
 }
 
+/** Qué pasa con los avisos con la app cerrada (vía la cuenta) */
+const PushNote = ({ status, error, onLogin }: { status: PushStatus; error?: string; onLogin: () => void }) => {
+  if (status === 'on')
+    return (
+      <p className="mt-1 text-[11px] leading-snug text-muted">
+        Llegan aunque la app esté cerrada, a la hora que elegiste (con unos minutos de diferencia).
+      </p>
+    )
+  if (status === 'no-account')
+    return (
+      <div className="mt-2 rounded-2xl bg-info-soft px-3 py-2.5 text-xs font-medium text-info">
+        <p>Para que lleguen con la app cerrada, inicia sesión en tu cuenta: así el servidor sabe a qué teléfono avisar.</p>
+        <button type="button" className="mt-1 font-bold underline" onClick={onLogin}>
+          Iniciar sesión
+        </button>
+      </div>
+    )
+  if (status === 'no-server')
+    return (
+      <p className="mt-2 rounded-2xl bg-warn-soft px-3 py-2.5 text-xs font-medium text-warn">
+        Falta activar el servidor de avisos en Supabase (es una sola vez). Mientras tanto, te avisamos al abrir la app.
+      </p>
+    )
+  if (status === 'error')
+    return (
+      <p className="mt-2 rounded-2xl bg-bad-soft px-3 py-2.5 text-xs font-medium text-bad">
+        No pudimos activar los avisos con la app cerrada: {error ?? 'intenta de nuevo más tarde'}
+      </p>
+    )
+  return (
+    <p className="mt-1 text-[11px] leading-snug text-muted">
+      En Android, con la app instalada, llegan aunque esté cerrada, pero Chrome elige el momento exacto y pueden atrasarse. En
+      iPhone solo se ven al abrir la app.
+    </p>
+  )
+}
+
 export const RemindersCard = () => {
   const data = useData()
   const today = useToday()
@@ -104,6 +142,7 @@ export const RemindersCard = () => {
   const navigate = useNavigate()
   const [caps, setCaps] = useState(initialCapabilities)
   const [busy, setBusy] = useState(false)
+  const push = usePush()
 
   const saved = data.settings.reminders
   const prefs = useMemo(() => reminderSettings(saved), [saved])
@@ -161,6 +200,7 @@ export const RemindersCard = () => {
             tone: 'good',
           })
           void checkRemindersSoon()
+          void syncPush(true)
         } else if (res.permission === 'denied') {
           toast({ message: 'Las notificaciones están bloqueadas. Abajo te explicamos cómo permitirlas.', tone: 'bad' })
         } else if (res.permission === 'default') {
@@ -171,6 +211,7 @@ export const RemindersCard = () => {
       } else {
         save({ enabled: false })
         await disableReminders()
+        void syncPush(true)
         toast({ message: 'Recordatorios desactivados' })
       }
     } finally {
@@ -181,6 +222,18 @@ export const RemindersCard = () => {
 
   const onTest = async () => {
     vibrate()
+    // Con el servidor funcionando, la prueba es de verdad: el aviso viaja desde Supabase
+    if (push.status === 'on') {
+      setBusy(true)
+      const { result, error } = await testPush().finally(() => setBusy(false))
+      if (result === 'sent')
+        toast({ message: 'Te mandamos un aviso desde el servidor: debería llegarte en segundos', tone: 'good' })
+      else if (result === 'jwt')
+        toast({ message: 'En Supabase, apaga “Verify JWT” en la función avisos y vuelve a probar', tone: 'bad' })
+      else if (result === 'no-device') toast({ message: 'Este teléfono aún no quedó registrado. Intenta de nuevo.', tone: 'bad' })
+      else toast({ message: error ?? 'No se pudo mandar la prueba', tone: 'bad' })
+      return
+    }
     const res = await sendTestNotification()
     if (res === 'shown') toast({ message: 'Listo: revisa tus notificaciones', tone: 'good' })
     else if (res === 'denied') toast({ message: 'Las notificaciones están bloqueadas para esta app', tone: 'bad' })
@@ -212,7 +265,7 @@ export const RemindersCard = () => {
         <Toggle checked={active} onChange={(v) => void onToggle(v)} label="Activar recordatorios" />
       </div>
 
-      <SupportNote info={describeSupport(caps, active)} />
+      <SupportNote info={active && push.status === 'on' ? { tone: 'good', text: PUSH_ON_TEXT } : describeSupport(caps, active)} />
 
       <AnimatePresence initial={false}>
         {active && (
@@ -273,18 +326,16 @@ export const RemindersCard = () => {
                 <Toggle checked={prefs.weekly} onChange={(v) => save({ weekly: v })} label="Resumen semanal y del mes" />
               </Row>
             </div>
-            <p className="mt-1 text-[11px] leading-snug text-muted">
-              En Android, con la app instalada, llegan aunque esté cerrada, pero Chrome elige el momento exacto y pueden
-              atrasarse. En iPhone solo se ven al abrir la app.
-            </p>
+            <PushNote status={push.status} error={push.error} onLogin={() => navigate('/cuenta')} />
             <Button
               variant="secondary"
               size="sm"
               className="mt-4"
               icon={<Send className="size-4" />}
               onClick={() => void onTest()}
+              disabled={busy}
             >
-              Probar notificación
+              {push.status === 'on' ? 'Probar aviso real' : 'Probar notificación'}
             </Button>
           </motion.div>
         )}

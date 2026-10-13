@@ -50,7 +50,7 @@ const snapshot = (): FinanceData => {
 }
 
 /** "Android · Chrome", "Windows · Edge"… (la base acepta hasta 80 letras) */
-const deviceLabel = () => {
+export const deviceLabel = () => {
   const ua = navigator.userAgent
   const os = /android/i.test(ua)
     ? 'Android'

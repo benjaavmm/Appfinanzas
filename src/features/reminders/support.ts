@@ -29,6 +29,7 @@ export interface SupportInfo {
 
 export const BACKGROUND_TEXT =
   'Te avisamos aunque la app esté cerrada (Chrome elige el momento exacto, así que puede atrasarse un poco).'
+export const PUSH_ON_TEXT = 'Activos: te avisamos aunque la app esté cerrada ✅'
 export const FOREGROUND_ONLY_TEXT = 'Tu navegador solo permite avisos cuando abres la app.'
 export const IOS_TEXT =
   'En iPhone, primero agrégala a la pantalla de inicio: en Safari toca Compartir y luego “Agregar a inicio”.'

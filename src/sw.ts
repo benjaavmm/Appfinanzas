@@ -4,7 +4,8 @@
  * - Precarga la app para que funcione sin conexión; la versión nueva espera al botón "Actualizar".
  * - Guarda en caché, la primera vez que se usan, los archivos pesados del lector de boletas.
  * - Recibe imágenes y textos compartidos desde otras apps ("Compartir → Mis Finanzas").
- * - Muestra recordatorios en segundo plano (Periodic Background Sync, Chrome Android).
+ * - Muestra recordatorios con la app cerrada: cuando llega un aviso del servidor (Web Push,
+ *   supabase/functions/avisos) y con Periodic Background Sync (Chrome Android).
  */
 import { clientsClaim } from 'workbox-core'
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
@@ -12,7 +13,7 @@ import { NavigationRoute, registerRoute } from 'workbox-routing'
 import { CacheFirst } from 'workbox-strategies'
 import { ExpirationPlugin } from 'workbox-expiration'
 import { createStore, get, set } from 'idb-keyval'
-import { computeReminders, TIMED_KINDS } from './features/reminders/compute'
+import { computeReminders, NOTIFIED_DB, TIMED_KINDS } from './features/reminders/compute'
 import { putSharedFile, putSharedText } from './lib/files'
 import { toDateStr } from './lib/dates'
 import type { FinanceData } from './lib/types'
@@ -74,8 +75,8 @@ self.addEventListener('fetch', (event) => {
 })
 
 // ── Recordatorios en segundo plano ──
-const metaStore = createStore('mis-finanzas-meta', 'meta')
-const NOTIFIED_KEY = 'recordatorios-enviados'
+const metaStore = createStore(NOTIFIED_DB.name, NOTIFIED_DB.store)
+const NOTIFIED_KEY = NOTIFIED_DB.key
 
 const readData = async (): Promise<FinanceData | null> => {
   try {
@@ -123,6 +124,44 @@ type PeriodicSyncEvent = ExtendableEvent & { tag: string }
 self.addEventListener('periodicsync', ((event: PeriodicSyncEvent) => {
   if (event.tag === 'recordatorios') event.waitUntil(notifyReminders())
 }) as EventListener)
+
+// ── Avisos del servidor (Web Push) ──
+// El servidor solo manda un "toque" a la hora elegida; el aviso se arma aquí con los datos del
+// teléfono. Siempre hay que mostrar algo: si no, Safari deja de mandar avisos y Chrome muestra uno genérico.
+const showFromPush = async (kind: string) => {
+  const icon = appUrl('./pwa-192.png')
+  if (kind === 'test') {
+    await self.registration.showNotification('✅ ¡Funciona!', {
+      body: 'Así te llegarán tus recordatorios, aunque la app esté cerrada.',
+      tag: 'recordatorio-prueba',
+      icon,
+      data: { url: appUrl('./#/ajustes') },
+    })
+    return
+  }
+  if ((await notifyReminders()) > 0) return
+  // Ya se habían mostrado (p. ej. abriste la app justo antes): se repone el más importante, sin sonar
+  const data = await readData()
+  const now = new Date()
+  const top = data ? computeReminders(data, toDateStr(now), now)[0] : undefined
+  await self.registration.showNotification(top?.title ?? 'Mis Finanzas', {
+    body: top?.body ?? 'Todo en orden por hoy ✅',
+    tag: top ? (TIMED_KINDS.has(top.kind) ? `recordatorio-${top.kind}` : top.id) : 'recordatorio-resumen',
+    icon,
+    silent: true,
+    data: { url: appUrl(`./${top?.url ?? ''}`) },
+  })
+}
+
+self.addEventListener('push', (event) => {
+  let kind = 'check'
+  try {
+    kind = (event.data?.json() as { t?: string } | undefined)?.t ?? 'check'
+  } catch {
+    /* sin contenido: revisar */
+  }
+  event.waitUntil(showFromPush(kind))
+})
 
 // La app puede pedir una revisión inmediata (al abrirse o al activar los recordatorios)
 self.addEventListener('message', (event) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeReminders, DEFAULT_REMINDERS, MAX_REMINDERS, reminderSettings, type Reminder } from '../compute'
+import { computeReminders, DEFAULT_REMINDERS, MAX_REMINDERS, pushDays, reminderSettings, type Reminder } from '../compute'
 import { NUDGES } from '../nudges'
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from '../../../lib/defaults'
 import { buildDemoData } from '../../../lib/demo'
@@ -703,5 +703,38 @@ describe('avisos con hora: orden, montos y personalidad', () => {
         expect(text(r)).not.toMatch(/[{}]|undefined|NaN/)
       }
     }
+  })
+})
+
+describe('días con avisos para el servidor (pushDays)', () => {
+  const base = { reminders: { enabled: true, daily: false, weekly: false, daysBefore: 1 } }
+
+  it('marca el día anterior al cobro (y no lo repite el día del cobro)', () => {
+    const data = make({ ...base, subscriptions: [sub({ nextDate: addDaysStr(TODAY, 4), anchorDay: 9 })] })
+    const days = pushDays(data, TODAY, new Set(), 10)
+    expect(days).toContain(addDaysStr(TODAY, 3))
+    expect(days).not.toContain(addDaysStr(TODAY, 4))
+  })
+
+  it('no cuenta el recordatorio diario ni lo que ya se mostró', () => {
+    const data = make({ reminders: { enabled: true, daily: true, weekly: false, daysBefore: 0 } })
+    expect(pushDays(data, TODAY, new Set(), 14)).toEqual([])
+    const withSub = make({ ...base, reminders: { ...base.reminders, daysBefore: 0 }, subscriptions: [sub()] })
+    const id = computeReminders(withSub, TODAY)[0].id
+    expect(pushDays(withSub, TODAY, new Set(), 1)).toEqual([TODAY])
+    expect(pushDays(withSub, TODAY, new Set([id]), 1)).toEqual([])
+  })
+
+  it('con el resumen semanal activo incluye los domingos', () => {
+    // Solo hay resumen si esa semana hubo gastos
+    const cat = DEFAULT_CATEGORIES.find((c) => c.kind === 'expense')!.id
+    const data = make({ reminders: { enabled: true, daily: false, weekly: true }, transactions: [expense(5000, cat)] })
+    const days = pushDays(data, TODAY, new Set(), 14)
+    expect(days).toEqual([addDaysStr(TODAY, 6)])
+    expect(new Date(`${days[0]}T12:00:00`).getDay()).toBe(0)
+  })
+
+  it('apagados: ningún día', () => {
+    expect(pushDays(make({ reminders: { enabled: false }, subscriptions: [sub()] }), TODAY)).toEqual([])
   })
 })

@@ -357,5 +357,166 @@ grant execute on function public.my_inbox_key() to authenticated;
 grant execute on function public.rotate_inbox_key() to authenticated;
 grant execute on function public.inbox_add(text, text, text) to anon, authenticated;
 
+-- ═══════════════════════ Avisos al teléfono (Web Push) ═══════════════════════
+-- Cada teléfono con los recordatorios activos deja aquí su "dirección" de avisos, la hora que
+-- eligió y los días en que tiene algo que avisar (cobros, vencimientos, resúmenes). La función
+-- "avisos" (supabase/functions/avisos) le manda un toque a esa hora y el teléfono arma el aviso
+-- con sus propios datos. Aquí no se guardan montos ni movimientos.
+
+create table if not exists public.push_subs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  endpoint text not null unique check (endpoint ~ '^https://' and char_length(endpoint) <= 1000),
+  p256dh text not null check (char_length(p256dh) between 20 and 200),
+  auth text not null check (char_length(auth) between 8 and 100),
+  hour smallint not null default 20 check (hour between 0 and 23),
+  tz text not null default 'America/Santiago' check (char_length(tz) <= 60),
+  daily boolean not null default true,
+  days date[] not null default '{}' check (cardinality(days) <= 100),
+  device text check (char_length(device) <= 80),
+  last_sent date,
+  test_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+create index if not exists push_subs_user on public.push_subs (user_id);
+
+-- Claves de envío (VAPID): las crea la función la primera vez. Solo el servidor las ve.
+create table if not exists public.push_config (
+  id smallint primary key default 1 check (id = 1),
+  public_key text not null,
+  private_jwk jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.push_subs enable row level security;
+alter table public.push_config enable row level security;
+drop policy if exists push_subs_select on public.push_subs;
+create policy push_subs_select on public.push_subs for select to authenticated using (user_id = auth.uid());
+revoke all on public.push_subs, public.push_config from anon, authenticated;
+grant select on public.push_subs to authenticated;
+
+-- La clave pública (la necesita el teléfono para suscribirse). null si la función aún no corre.
+create or replace function public.push_public_key()
+returns text language sql stable security definer set search_path = public as $$
+  select public_key from push_config where id = 1;
+$$;
+
+-- Guarda o actualiza este teléfono (si la dirección era de otra cuenta en el mismo teléfono, pasa a la tuya)
+create or replace function public.push_save(
+  p_endpoint text, p_p256dh text, p_auth text, p_hour int, p_tz text, p_daily boolean, p_days date[], p_device text
+)
+returns text language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); zone text := coalesce(nullif(btrim(p_tz), ''), 'America/Santiago');
+begin
+  if me is null then raise exception 'not_authenticated'; end if;
+  -- Zona horaria inválida: Santiago
+  begin
+    perform now() at time zone zone;
+  exception when others then
+    zone := 'America/Santiago';
+  end;
+  if (select count(*) from push_subs where user_id = me and endpoint <> p_endpoint) >= 10 then
+    delete from push_subs where id = (select id from push_subs where user_id = me order by updated_at limit 1);
+  end if;
+  insert into push_subs as s (user_id, endpoint, p256dh, auth, hour, tz, daily, days, device)
+  values (
+    me, p_endpoint, p_p256dh, p_auth, least(greatest(coalesce(p_hour, 20), 0), 23), left(zone, 60),
+    coalesce(p_daily, true), (select coalesce(array_agg(d order by d), '{}') from (select distinct d from unnest(p_days) d where d is not null limit 100) x),
+    left(p_device, 80)
+  )
+  on conflict (endpoint) do update set
+    user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, hour = excluded.hour, tz = excluded.tz,
+    daily = excluded.daily, days = excluded.days, device = excluded.device, updated_at = now(),
+    -- Si cambió de cuenta o de hora, que hoy pueda volver a avisar
+    last_sent = case when s.user_id = excluded.user_id and s.hour = excluded.hour then s.last_sent end;
+  return 'ok';
+end;
+$$;
+
+-- Este teléfono ya no quiere avisos
+create or replace function public.push_remove(p_endpoint text)
+returns void language sql security definer set search_path = public as $$
+  delete from push_subs where user_id = auth.uid() and endpoint = p_endpoint;
+$$;
+
+-- "Probar": la función manda un aviso de prueba a tus teléfonos en su próxima pasada
+create or replace function public.push_test()
+returns int language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  update push_subs set test_at = now() where user_id = auth.uid();
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+-- Solo para la función "avisos" (clave de servidor) ─────────────────────────
+
+create or replace function public.push_vapid()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('public_key', public_key, 'private_jwk', private_jwk) from push_config where id = 1;
+$$;
+
+create or replace function public.push_vapid_set(p_public text, p_private jsonb)
+returns jsonb language sql security definer set search_path = public as $$
+  insert into push_config (id, public_key, private_jwk) values (1, p_public, p_private) on conflict (id) do nothing;
+  select jsonb_build_object('public_key', public_key, 'private_jwk', private_jwk) from push_config where id = 1;
+$$;
+
+-- Los que toca avisar ahora (y los marca, para no repetir): a su hora o hasta 3 horas después,
+-- una vez al día, si tienen el recordatorio diario o hoy hay algo que avisar. Más las pruebas.
+create or replace function public.push_claim()
+returns table (id uuid, endpoint text, p256dh text, auth text, kind text)
+language sql security definer set search_path = public as $$
+  with due as (
+    select s.id,
+      case when s.test_at > now() - interval '10 minutes' then 'test' else 'check' end as kind,
+      (now() at time zone s.tz)::date as local_day
+    from push_subs s
+    where s.test_at > now() - interval '10 minutes'
+      or (
+        extract(hour from now() at time zone s.tz) between s.hour and s.hour + 2
+        and (s.last_sent is null or s.last_sent < (now() at time zone s.tz)::date)
+        and (s.daily or (now() at time zone s.tz)::date = any (s.days))
+      )
+    order by s.id
+    limit 1000
+    for update skip locked
+  )
+  update push_subs s set
+    last_sent = case when due.kind = 'check' then due.local_day else s.last_sent end,
+    test_at = null
+  from due
+  where s.id = due.id
+  returning s.id, s.endpoint, s.p256dh, s.auth, due.kind;
+$$;
+
+-- Resultado del envío: las direcciones vencidas se borran; las que fallaron se reintentan
+create or replace function public.push_result(p_gone uuid[], p_retry uuid[])
+returns void language sql security definer set search_path = public as $$
+  delete from push_subs where id = any (coalesce(p_gone, '{}'));
+  update push_subs set last_sent = null where id = any (coalesce(p_retry, '{}'));
+$$;
+
+revoke all on function public.push_public_key() from public, anon;
+revoke all on function public.push_save(text, text, text, int, text, boolean, date[], text) from public, anon;
+revoke all on function public.push_remove(text) from public, anon;
+revoke all on function public.push_test() from public, anon;
+revoke all on function public.push_vapid() from public, anon, authenticated;
+revoke all on function public.push_vapid_set(text, jsonb) from public, anon, authenticated;
+revoke all on function public.push_claim() from public, anon, authenticated;
+revoke all on function public.push_result(uuid[], uuid[]) from public, anon, authenticated;
+grant execute on function public.push_public_key() to authenticated;
+grant execute on function public.push_save(text, text, text, int, text, boolean, date[], text) to authenticated;
+grant execute on function public.push_remove(text) to authenticated;
+grant execute on function public.push_test() to authenticated;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function public.push_vapid(), public.push_vapid_set(text, jsonb), public.push_claim(),
+      public.push_result(uuid[], uuid[]) to service_role;
+  end if;
+end $$;
+
 -- Para que la API vea las funciones nuevas al tiro
 notify pgrst, 'reload schema';

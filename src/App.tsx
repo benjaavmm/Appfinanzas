@@ -35,6 +35,7 @@ import Friends from './pages/Friends'
 import Assistant from './pages/Assistant'
 import BankAuto from './pages/BankAuto'
 import { startInbox } from './lib/cloud/inbox'
+import { startPush } from './lib/cloud/push'
 
 const LOCK_AFTER_MS = 60_000
 const ACTIVE_KEY = 'mf-last-active'
@@ -276,6 +277,7 @@ export default function App() {
     startSync()
     startSocial()
     startInbox()
+    startPush()
     void initAuth()
     if (checkUpdated()) toast({ message: '✨ Listo, ya tienes la versión nueva de Mis Finanzas' })
   }, [hydrated])

@@ -94,6 +94,33 @@ const agoText = (days: number) => (days === 1 ? 'ayer' : `hace ${days} días`)
  * `now` da la hora para los avisos con hora (diario, semanal y del mes): sin `now` no se calculan.
  * `today` manda para las fechas; de `now` solo se usa la hora.
  */
+/** Dónde guarda el service worker los avisos ya mostrados (id → día) */
+export const NOTIFIED_DB = { name: 'mis-finanzas-meta', store: 'meta', key: 'recordatorios-enviados' } as const
+
+/**
+ * Días de los próximos `horizon` en que habrá algo nuevo que avisar (cobros, préstamos, tarjetas,
+ * presupuestos, resúmenes), sin contar el recordatorio diario. Se manda al servidor para que
+ * despierte al teléfono esos días aunque el recordatorio diario esté apagado.
+ */
+export const pushDays = (data: FinanceData, today: DateStr, sent: ReadonlySet<string> = new Set(), horizon = 45): DateStr[] => {
+  const prefs = reminderSettings(data.settings?.reminders)
+  if (!prefs.enabled) return []
+  const seen = new Set(sent)
+  const out: DateStr[] = []
+  for (let i = 0; i < horizon; i++) {
+    const day = addDaysStr(today, i)
+    const [y, m, d] = day.split('-').map(Number)
+    const at = new Date(y, m - 1, d, prefs.dailyHour, 30)
+    const fresh = computeReminders(data, day, at)
+      .filter((r) => r.kind !== 'daily' && !seen.has(r.id))
+      .map((r) => r.id)
+    if (!fresh.length) continue
+    out.push(day)
+    for (const id of fresh) seen.add(id)
+  }
+  return out
+}
+
 export const computeReminders = (data: FinanceData, today: DateStr, now?: Date): Reminder[] => {
   const prefs = reminderSettings(data.settings?.reminders)
   if (!prefs.enabled) return []
