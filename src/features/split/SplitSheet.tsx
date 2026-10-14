@@ -144,6 +144,9 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
   const [newName, setNewName] = useState('')
   const [payMode, setPayMode] = useState<PayMode>('me')
   const [paidInput, setPaidInput] = useState<Record<string, string>>({})
+  /** ¿Ya te devolvieron algo? (transferencias que ya te hicieron) */
+  const [gotBack, setGotBack] = useState(false)
+  const [backInput, setBackInput] = useState<Record<string, string>>({})
   const [mode, setMode] = useState<Mode>('equal')
   const [custom, setCustom] = useState<Record<string, string>>({})
   const [collectWeek, setCollectWeek] = useState(false)
@@ -197,6 +200,7 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
     }
     setCustom(drop)
     setPaidInput(drop)
+    setBackInput(drop)
   }
 
   /* ───────── Cálculo en vivo ───────── */
@@ -227,8 +231,15 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
       : paidSplit?.ok
         ? paidSplit.shares.map((x) => x.amount)
         : null
+  // Lo que cada uno ya te transfirió de vuelta (tú no cuentas)
+  const received = gotBack ? [0, ...people.map((n) => readAmount(backInput, keyOf(n)) ?? 0)] : undefined
+  const receivedTotal = received?.reduce((a, b) => a + b, 0) ?? 0
+  const backTooMuch = !!paid && receivedTotal > paid[0]
   const plan: SplitPlan | null =
-    shares && paid ? planSplit({ shares, paid, decimals, what, accountId, categoryId, date, splitId: 'vista' }) : null
+    shares && paid && !backTooMuch
+      ? planSplit({ shares, paid, received, decimals, what, accountId, categoryId, date, splitId: 'vista' })
+      : null
+  const backOf = (name: string) => (received ? received[people.findIndex((p) => keyOf(p) === keyOf(name)) + 1] || 0 : 0)
 
   const mine = plan?.mine ?? 0
   const myPaid = plan?.myPaid ?? 0
@@ -270,7 +281,8 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
             ? `Falta anotar quién pagó ${fmt(e.diff)}`
             : e.message,
     }
-  } else if (idle)
+  } else if (backTooMuch) problem = { hard: true, text: `Te devolvieron más de lo que pagaste (${fmt(paid?.[0] ?? 0)})` }
+  else if (idle)
     problem = {
       hard: true,
       text:
@@ -318,6 +330,7 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
     const final = planSplit({
       shares,
       paid,
+      received,
       decimals,
       what,
       accountId,
@@ -360,7 +373,8 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
       mine: final.mine,
       myPaid: final.myPaid,
       transfers: final.transfers.filter((t) => t.amount > 0),
-      people: people.map((name, i) => ({ name, share: shares[i + 1].amount, paid: paid[i + 1] })),
+      // Para el cobro: lo que pagó en la caja más lo que ya te transfirió
+      people: people.map((name, i) => ({ name, share: shares[i + 1].amount, paid: paid[i + 1] + (received?.[i + 1] ?? 0) })),
     })
   }
 
@@ -795,6 +809,39 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
                 </div>
               )}
             </Section>
+
+            {/* ───── Lo que ya te devolvieron ───── */}
+            <Section label="¿Ya te devolvieron algo?">
+              <Segmented
+                value={gotBack ? 'yes' : 'no'}
+                onChange={(v) => setGotBack(v === 'yes')}
+                options={[
+                  { value: 'no', label: 'Todavía no' },
+                  { value: 'yes', label: 'Sí, me transfirieron' },
+                ]}
+              />
+              {gotBack && (
+                <div className="mt-3 rounded-2xl bg-surface-2 p-3">
+                  <p className="mb-2 text-xs text-muted">
+                    Anota cuánto te transfirió cada uno. Si alguien te pasó de más, la app te dice cuánto le debes.
+                  </p>
+                  <ul className="space-y-2">
+                    {people.map((name) => (
+                      <li key={keyOf(name)} className="flex items-center gap-3">
+                        <Avatar name={name} size={36} />
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</span>
+                        <MiniAmountInput
+                          value={backInput[keyOf(name)] ?? ''}
+                          onChange={(v) => setBackInput((c) => ({ ...c, [keyOf(name)]: v }))}
+                          placeholder="0"
+                          label={`Lo que te transfirió ${name}`}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </Section>
           </>
         )}
 
@@ -814,7 +861,7 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
                   key={`in-${l.person}`}
                   left={<Avatar name={l.person} size={36} />}
                   title={l.person}
-                  sub="Te debe"
+                  sub={backOf(l.person) > 0 ? `Te debe · ya te pasó ${fmt(backOf(l.person))}` : 'Te debe'}
                   amount={fmt(l.amount)}
                 />
               ))}
@@ -823,7 +870,7 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
                   key={`out-${l.person}`}
                   left={<Avatar name={l.person} size={36} />}
                   title={l.person}
-                  sub="Le debes"
+                  sub={backOf(l.person) > 0 ? `Le debes · te pasó ${fmt(backOf(l.person))} y era de más` : 'Le debes'}
                   amount={fmt(l.amount)}
                 />
               ))}
@@ -846,6 +893,7 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
             </ul>
             <p className="mt-2 border-t border-line pt-2 text-xs text-muted">
               {myPaid > 0 ? `Sale ${fmt(myPaid)} de tu cuenta` : 'No sale nada de tu cuenta'}
+              {receivedTotal > 0 ? ` y te devolvieron ${fmt(receivedTotal)}` : ''}
               {mine > 0 ? `: ${fmt(mine)} es tu gasto` : ''}
               {owed > 0 ? ` y ${fmt(owed)} queda como préstamo hasta que te paguen` : ''}
               {iOwe > 0 ? `${myPaid > 0 || mine > 0 ? '. ' : ': '}Debes ${fmt(iOwe)} hasta que lo pagues` : ''}.

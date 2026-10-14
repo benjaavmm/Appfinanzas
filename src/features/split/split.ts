@@ -285,6 +285,8 @@ export interface SplitPlanInput {
   shares: SplitShare[]
   /** Cuánto pagó cada uno en la caja (mismo orden que `shares`). Sin esto: pagué todo yo. */
   paid?: number[]
+  /** Lo que cada uno ya me transfirió de vuelta (mismo orden que `shares`; lo mío se ignora) */
+  received?: number[]
   decimals?: number
   what?: string
   accountId: ID
@@ -302,8 +304,10 @@ export interface SplitPlan {
   loans: NewLoan[]
   /** Todo lo que hay que pasarse para quedar a mano, con nombres (incluye lo que no pasa por mí) */
   transfers: NamedTransfer[]
-  /** Lo que pagué yo (lo que realmente sale de mi cuenta) */
+  /** Lo que pagué yo en la caja */
   myPaid: number
+  /** Lo que ya me devolvieron (entró a mi cuenta) */
+  received: number
   /** Mi parte */
   mine: number
 }
@@ -317,6 +321,7 @@ export interface SplitPlan {
 export const planSplit = ({
   shares,
   paid,
+  received,
   decimals = 0,
   what,
   accountId,
@@ -333,7 +338,12 @@ export const planSplit = ({
   // Si "yo" no está en la lista (no consumí) igual soy quien pagó: se me agrega con parte 0
   const all: SplitShare[] = shares.some((s) => s.me) ? shares : [{ name: 'Tú', me: true, amount: 0 }, ...shares]
   const paidAll = paid ? (shares.some((s) => s.me) ? paid : [0, ...paid]) : all.map((s) => (s.me ? total : 0))
-  const transfers = settleSplit(all, paidAll, decimals)
+  // Lo que ya me devolvieron cuenta como pagado por ellos y descontado de lo mío
+  const recvAll = received ? (shares.some((s) => s.me) ? received : [0, ...received]) : all.map(() => 0)
+  const recvMinor = all.map((s, i) => (s.me ? 0 : toMinor(recvAll[i] ?? 0, decimals)))
+  const receivedMinor = recvMinor.reduce((a, b) => a + b, 0)
+  const effective = paidAll.map((p, i) => fromMinor(toMinor(p, decimals) + (all[i].me ? -receivedMinor : recvMinor[i]), decimals))
+  const transfers = settleSplit(all, effective, decimals)
 
   const mineMinor = all.filter((s) => s.me).reduce((sum, s) => sum + toMinor(s.amount, decimals), 0)
   const mine = fromMinor(mineMinor, decimals)
@@ -384,6 +394,7 @@ export const planSplit = ({
       fromMe: all[t.from].me,
     })),
     myPaid,
+    received: fromMinor(receivedMinor, decimals),
     mine,
   }
 }

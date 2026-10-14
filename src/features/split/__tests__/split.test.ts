@@ -433,6 +433,23 @@ describe('planSplit', () => {
     expect(debtTotals(loans)).toMatchObject({ owedToMe: 9250, iOwe: 0 })
   })
 
+  it('Jazmín ya me transfirió 14.500 (de más): ahora le debo 5.250', () => {
+    const shares = splitTotal(31500, [me, { name: 'Jazmín' }])
+    const plan = planSplit({ ...base, shares, paid: [25000, 6500], received: [0, 14500] })
+    expect(plan.expense?.amount).toBe(15750)
+    expect(plan.received).toBe(14500)
+    expect(plan.loans).toEqual([expect.objectContaining({ direction: 'borrowed', person: 'Jazmín', amount: 5250 })])
+    const { transactions, loans } = materialize(plan)
+    // Salieron 25.000 y entraron 14.500
+    expect(accountBalances({ accounts: [card], transactions, loans }).get('card')).toBe(-10500)
+  })
+
+  it('si me transfirió justo lo que debía, quedamos a mano', () => {
+    const shares = splitTotal(31500, [me, { name: 'Jazmín' }])
+    const plan = planSplit({ ...base, shares, paid: [25000, 6500], received: [0, 9250] })
+    expect(plan.loans).toEqual([])
+  })
+
   it('si pagué menos que mi parte, queda "Debes" y de la cuenta sale solo lo que pagué', () => {
     const shares = splitTotal(31500, [me, { name: 'Jazmín' }])
     const plan = planSplit({ ...base, shares, paid: [6500, 25000] })
