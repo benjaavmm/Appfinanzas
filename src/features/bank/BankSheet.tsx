@@ -1,10 +1,8 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router'
 import {
   ArrowLeft,
   BellRing,
   ChevronDown,
-  ChevronRight,
   ClipboardPaste,
   Copy,
   Globe,
@@ -412,7 +410,6 @@ DraftCard.displayName = 'DraftCard'
 
 /** Agregar movimientos desde notificaciones o correos del banco */
 export const BankSheet = ({ open, onClose, text, inbox }: Props) => {
-  const navigate = useNavigate()
   const accounts = useStore((s) => s.accounts)
   const categories = useStore((s) => s.categories)
   const currency = useStore((s) => s.settings.currency)
@@ -473,11 +470,6 @@ export const BankSheet = ({ open, onClose, text, inbox }: Props) => {
     } catch {
       setClipError('No pudimos leer lo que copiaste. Mantén presionado el cuadro de texto y elige “Pegar”.')
     }
-  }
-
-  const goAuto = () => {
-    onClose()
-    navigate('/automatico')
   }
 
   /* ── Agregar ── */
@@ -596,19 +588,6 @@ export const BankSheet = ({ open, onClose, text, inbox }: Props) => {
           Se lee en tu teléfono: el texto no se envía a ningún lado.
         </p>
       </section>
-
-      <button
-        type="button"
-        onClick={goAuto}
-        className="flex w-full items-center gap-3 rounded-2xl border border-line px-3.5 py-3 text-left transition hover:bg-surface-2 active:scale-[0.99]"
-      >
-        <Sparkles className="size-5 shrink-0 text-brand" />
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-brand">Configurar modo automático</span>
-          <span className="block text-xs text-muted">Que los avisos del banco lleguen solos a la app</span>
-        </span>
-        <ChevronRight className="size-4 shrink-0 text-muted" />
-      </button>
     </div>
   )
 
