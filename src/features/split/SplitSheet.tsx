@@ -1,8 +1,8 @@
 import { motion } from 'motion/react'
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
-import { Check, MessageCircle, Plus, UserPlus, Users, X } from 'lucide-react'
+import { ArrowRight, Check, MessageCircle, Plus, UserPlus, Users, X } from 'lucide-react'
 import { Avatar } from '../../components/forms/LoanForms'
-import { Button, Chip, cx, Field, Input, Segmented, Toggle } from '../../components/ui'
+import { Button, Chip, cx, Field, Input, Segmented } from '../../components/ui'
 import { AccountChips, AmountInput, CategoryGrid } from '../../components/ui/pickers'
 import { Sheet } from '../../components/ui/Sheet'
 import { addDaysStr, fmtDate, fmtDateShort, todayStr } from '../../lib/dates'
@@ -13,15 +13,26 @@ import { uid, useStore } from '../../lib/store'
 import { openSheet, toast } from '../../lib/ui'
 import type { DateStr, ID } from '../../lib/types'
 import { MiniAmountInput } from './MiniAmountInput'
-import { assignStatus, chargeText, groupChargeText, planSplit, trySplit, type SplitParticipant, type SplitShare } from './split'
+import {
+  assignStatus,
+  chargeText,
+  groupChargeText,
+  planSplit,
+  trySplit,
+  type NamedTransfer,
+  type SplitParticipant,
+  type SplitPlan,
+} from './split'
 
 type Mode = 'equal' | 'custom'
+/** Quién pagó en la caja: todo yo, o entre varios */
+type PayMode = 'me' | 'many'
 
 /** Clave de "yo" en los montos distintos (los demás usan su nombre normalizado) */
 const ME = '__me__'
 const keyOf = (name: string) => normalizeText(name)
 
-/** Nombres que significan "yo": ya estás incluido con el interruptor */
+/** Nombres que significan "yo": ya estás incluido */
 const SELF_NAMES = new Set(['yo', 'tu', 'yo mismo', 'yo misma', 'me', 'mi'])
 
 /** "Pedro, Juan y Cami" → ["Pedro", "Juan", "Cami"] */
@@ -31,6 +42,13 @@ const parseNames = (raw: string) =>
     .map((s) => s.trim().replace(/\s+/g, ' ').slice(0, 40))
     .filter(Boolean)
 
+/** Lo de cada persona (no yo) para el paso final */
+interface PersonResult {
+  name: string
+  share: number
+  paid: number
+}
+
 interface Done {
   splitId: ID
   total: number
@@ -39,7 +57,9 @@ interface Done {
   categoryId?: ID
   dueDate?: DateStr
   mine: number
-  others: SplitShare[]
+  myPaid: number
+  transfers: NamedTransfer[]
+  people: PersonResult[]
 }
 
 const MeAvatar = ({ size = 40 }: { size?: number }) => (
@@ -54,7 +74,7 @@ const MeAvatar = ({ size = 40 }: { size?: number }) => (
 
 /**
  * Como `Field`, pero con un <div>: `Field` usa <label> y, con varios botones adentro,
- * tocar el título activaría el primero (p. ej. el interruptor "Yo también consumí").
+ * tocar el título activaría el primero.
  */
 const Section = ({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) => (
   <div role="group" aria-label={label}>
@@ -120,9 +140,10 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
     return def?.id ?? activeAccounts[0]?.id ?? ''
   })
   const [date, setDate] = useState<DateStr>(todayStr)
-  const [iConsumed, setIConsumed] = useState(true)
   const [people, setPeople] = useState<string[]>([])
   const [newName, setNewName] = useState('')
+  const [payMode, setPayMode] = useState<PayMode>('me')
+  const [paidInput, setPaidInput] = useState<Record<string, string>>({})
   const [mode, setMode] = useState<Mode>('equal')
   const [custom, setCustom] = useState<Record<string, string>>({})
   const [collectWeek, setCollectWeek] = useState(false)
@@ -160,71 +181,109 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
       keys.add(k)
       next.push(n)
     }
-    if (self) {
-      setIConsumed(true)
-      toast({ message: 'Tú ya estás incluido: usa "Yo también consumí"', tone: 'info' })
-    }
+    if (self) toast({ message: 'Tú ya estás incluido', tone: 'info' })
     setPeople(next)
     setNewName('')
     vibrate(6)
   }
 
   const removePerson = (name: string) => {
-    setPeople((ps) => ps.filter((p) => keyOf(p) !== keyOf(name)))
-    setCustom((c) => {
+    const k = keyOf(name)
+    setPeople((ps) => ps.filter((p) => keyOf(p) !== k))
+    const drop = (c: Record<string, string>) => {
       const next = { ...c }
-      delete next[keyOf(name)]
+      delete next[k]
       return next
-    })
+    }
+    setCustom(drop)
+    setPaidInput(drop)
   }
 
   /* ───────── Cálculo en vivo ───────── */
 
   const totalValue = Number(total) || 0
-  const parseCustom = (k: string) => {
-    const v = custom[k]
+  const readAmount = (map: Record<string, string>, k: string) => {
+    const v = map[k]
     return v === undefined || v === '' ? undefined : Number(v)
   }
+  // Tú siempre estás: si no consumiste, en "Montos distintos" tu parte va en 0
   const participants: SplitParticipant[] = [
-    ...(iConsumed ? [{ name: 'Tú', me: true, amount: mode === 'custom' ? parseCustom(ME) : undefined }] : []),
-    ...people.map((name) => ({ name, amount: mode === 'custom' ? parseCustom(keyOf(name)) : undefined })),
+    { name: 'Tú', me: true, amount: mode === 'custom' ? readAmount(custom, ME) : undefined },
+    ...people.map((name) => ({ name, amount: mode === 'custom' ? readAmount(custom, keyOf(name)) : undefined })),
   ]
-  const split = totalValue > 0 && people.length > 0 ? trySplit(totalValue, participants, decimals) : null
+  const payers: SplitParticipant[] = [
+    { name: 'Tú', me: true, amount: readAmount(paidInput, ME) },
+    ...people.map((name) => ({ name, amount: readAmount(paidInput, keyOf(name)) })),
+  ]
+  const ready = totalValue > 0 && people.length > 0
+  const split = ready ? trySplit(totalValue, participants, decimals) : null
   const shares = split?.ok ? split.shares : null
-  const mine = shares?.filter((s) => s.me).reduce((s, x) => s + x.amount, 0) ?? 0
-  const others = shares?.filter((s) => !s.me) ?? []
-  const owed = others.reduce((s, x) => s + x.amount, 0)
-  const zeroPerson = others.find((s) => s.amount <= 0)
+  // Quién pagó: "Pagué yo" es todo mío; "Pagamos varios" reparte lo que no se escribió entre los que quedaron en blanco
+  const paidSplit = ready && payMode === 'many' ? trySplit(totalValue, payers, decimals) : null
+  const paid = !ready
+    ? null
+    : payMode === 'me'
+      ? payers.map((p) => (p.me ? totalValue : 0))
+      : paidSplit?.ok
+        ? paidSplit.shares.map((x) => x.amount)
+        : null
+  const plan: SplitPlan | null =
+    shares && paid ? planSplit({ shares, paid, decimals, what, accountId, categoryId, date, splitId: 'vista' }) : null
+
+  const mine = plan?.mine ?? 0
+  const myPaid = plan?.myPaid ?? 0
+  const owedToMe = plan?.loans.filter((l) => l.direction === 'lent') ?? []
+  const iOweTo = plan?.loans.filter((l) => l.direction === 'borrowed') ?? []
+  const owed = owedToMe.reduce((s, l) => s + l.amount, 0)
+  const iOwe = iOweTo.reduce((s, l) => s + l.amount, 0)
+  const between = plan?.transfers.filter((t) => !t.toMe && !t.fromMe && t.amount > 0) ?? []
   const status = assignStatus(totalValue, participants, decimals)
-  const shareOf = (k: string) =>
-    shares?.find((s, i) => (k === ME ? s.me : !s.me && keyOf(participants[i].name) === k))?.amount ?? 0
+  const payStatus = assignStatus(totalValue, payers, decimals)
+  const shareOf = (k: string) => shares?.find((_, i) => (k === ME ? i === 0 : keyOf(participants[i].name) === k))?.amount ?? 0
+  const paidOf = (k: string) => paid?.find((_, i) => (k === ME ? i === 0 : keyOf(payers[i].name) === k)) ?? 0
+  // Alguien a quien no le toca nada y que tampoco pagó no tiene nada que hacer aquí
+  const idle = shares && paid ? people.find((_, i) => shares[i + 1].amount <= 0 && paid[i + 1] <= 0) : undefined
 
   let problem: { text: string; hard: boolean } | null = null
   if (totalValue <= 0) problem = { text: 'Ingresa cuánto salió la cuenta', hard: false }
   else if (people.length === 0) problem = { text: 'Agrega al menos a una persona además de ti', hard: false }
-  else if (!accountId) problem = { text: 'Elige con qué pagaste', hard: false }
+  else if (!accountId) problem = { text: 'Elige la cuenta', hard: false }
   else if (split && !split.ok) {
     const e = split.error
     problem = {
       hard: true,
       text:
         e.code === 'over'
-          ? `Los montos suman ${fmt(e.diff)} más que el total`
+          ? `Las partes suman ${fmt(e.diff)} más que el total`
           : e.code === 'mismatch'
-            ? `Los montos no cuadran: faltan ${fmt(e.diff)} por asignar`
+            ? `Las partes no cuadran: faltan ${fmt(e.diff)} por asignar`
             : e.message,
     }
-  } else if (zeroPerson)
+  } else if (paidSplit && !paidSplit.ok) {
+    const e = paidSplit.error
+    problem = {
+      hard: true,
+      text:
+        e.code === 'over'
+          ? `Lo pagado suma ${fmt(e.diff)} más que el total`
+          : e.code === 'mismatch'
+            ? `Falta anotar quién pagó ${fmt(e.diff)}`
+            : e.message,
+    }
+  } else if (idle)
     problem = {
       hard: true,
       text:
         mode === 'equal'
           ? `El total es muy chico para dividirlo entre ${participants.length}`
-          : `A ${zeroPerson.name} le toca ${fmt(0)}: ponle un monto o quítalo`,
+          : `A ${idle} le toca ${fmt(0)} y no pagó nada: ponle un monto o quítalo`,
     }
-  const canSave = !problem && !!shares
+  else if (plan && mine <= 0 && myPaid <= 0)
+    problem = { hard: true, text: 'No pagaste ni consumiste nada: no hay nada que anotarte' }
+  const canSave = !problem && !!plan
 
   const dueDate = collectWeek ? addDaysStr(date, 7) : undefined
+  const onlyIOwe = iOwe > 0 && owed === 0
 
   /* ───────── ¿Qué fue? ───────── */
 
@@ -253,11 +312,13 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
   /* ───────── Guardar ───────── */
 
   const save = () => {
-    if (!canSave || !shares) return
+    if (!canSave || !shares || !paid) return
     const splitId = uid()
     const fallbackCat = expenseCats.find((c) => c.id === 'c-otros')?.id
-    const plan = planSplit({
+    const final = planSplit({
       shares,
+      paid,
+      decimals,
       what,
       accountId,
       categoryId: categoryId ?? fallbackCat,
@@ -267,15 +328,18 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
     })
     const s = useStore.getState()
     // En fechas pasadas no inventamos la hora
-    if (plan.expense) s.addTransaction(date === todayStr() ? plan.expense : { ...plan.expense, time: undefined })
-    const loans = plan.loans.map((l) => s.addLoan(l))
+    if (final.expense) s.addTransaction(date === todayStr() ? final.expense : { ...final.expense, time: undefined })
+    for (const l of final.loans) s.addLoan(l)
     vibrate(18)
-    const owedTotal = loans.reduce((sum, l) => sum + l.amount, 0)
+    const lent = final.loans.filter((l) => l.direction === 'lent')
+    const owe = final.loans.filter((l) => l.direction === 'borrowed')
+    const sum = (ls: typeof lent) => fmt(ls.reduce((n, l) => n + l.amount, 0))
+    const parts = [
+      lent.length === 1 ? `${lent[0].person} te debe ${sum(lent)}` : lent.length > 1 ? `te deben ${sum(lent)}` : '',
+      owe.length === 1 ? `le debes ${sum(owe)} a ${owe[0].person}` : owe.length > 1 ? `debes ${sum(owe)}` : '',
+    ].filter(Boolean)
     toast({
-      message:
-        loans.length === 1
-          ? `Listo: ${loans[0].person} te debe ${fmt(owedTotal)}`
-          : `Listo: ${loans.length} personas te deben ${fmt(owedTotal)}`,
+      message: parts.length ? `Listo: ${parts.join(' y ')}` : 'Listo: quedaron a mano',
       tone: 'good',
       action: {
         label: 'Deshacer',
@@ -291,10 +355,12 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
       total: totalValue,
       what: what.trim(),
       accountId,
-      categoryId: plan.expense?.categoryId,
+      categoryId: final.expense?.categoryId,
       dueDate,
-      mine: plan.expense?.amount ?? 0,
-      others: shares.filter((x) => !x.me && x.amount > 0),
+      mine: final.mine,
+      myPaid: final.myPaid,
+      transfers: final.transfers.filter((t) => t.amount > 0),
+      people: people.map((name, i) => ({ name, share: shares[i + 1].amount, paid: paid[i + 1] })),
     })
   }
 
@@ -306,9 +372,26 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
     const account = store.accounts.find((a) => a.id === done.accountId)
     const cat = store.categories.find((c) => c.id === done.categoryId)
     const due = done.dueDate ? fmtDate(done.dueDate) : undefined
-    const charge = (sh: SplitShare) => {
-      setSent((prev) => new Set(prev).add(keyOf(sh.name)))
-      void sendText(chargeText({ name: sh.name, amount: sh.amount, total: done.total, what: done.what, fmt, due }))
+    const toMe = done.transfers.filter((t) => t.toMe)
+    const fromMe = done.transfers.filter((t) => t.fromMe)
+    const others = done.transfers.filter((t) => !t.toMe && !t.fromMe)
+    const person = (name: string) => done.people.find((p) => keyOf(p.name) === keyOf(name))
+    const myName = store.settings.userName?.trim() || 'yo'
+    const charge = (t: NamedTransfer) => {
+      setSent((prev) => new Set(prev).add(keyOf(t.from)))
+      const p = person(t.from)
+      void sendText(
+        chargeText({
+          name: t.from,
+          amount: t.amount,
+          total: done.total,
+          share: p?.share,
+          paid: p?.paid,
+          what: done.what,
+          fmt,
+          due,
+        }),
+      )
     }
     return (
       <Sheet
@@ -342,8 +425,9 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
               </motion.div>
               <p className="mt-3 text-lg font-bold">{done.what ? `${done.what}: ¡listo!` : '¡Cuenta dividida!'}</p>
               <p className="text-sm text-muted">
-                Pagaste {fmt(done.total)}
-                {account ? ` con ${account.icon} ${account.name}` : ''}
+                {done.myPaid > 0
+                  ? `Pagaste ${fmt(done.myPaid)}${done.myPaid < done.total ? ` de ${fmt(done.total)}` : ''}${account ? ` con ${account.icon} ${account.name}` : ''}`
+                  : `La cuenta salió ${fmt(done.total)} y no pagaste nada en la caja`}
               </p>
             </div>
 
@@ -357,26 +441,26 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
                     amount={fmt(done.mine)}
                   />
                 )}
-                {done.others.map((sh) => {
-                  const wasSent = sent.has(keyOf(sh.name))
+                {toMe.map((t) => {
+                  const wasSent = sent.has(keyOf(t.from))
                   return (
-                    <li key={sh.name} className="py-3">
+                    <li key={`in-${t.from}`} className="py-3">
                       <div className="flex items-center gap-3">
-                        <Avatar name={sh.name} size={40} />
+                        <Avatar name={t.from} size={40} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold">{sh.name}</p>
+                          <p className="truncate text-sm font-semibold">{t.from}</p>
                           <p className="truncate text-xs text-muted">
                             Te debe{done.dueDate ? ` · vence el ${fmtDateShort(done.dueDate)}` : ''}
                           </p>
                         </div>
-                        <p className="shrink-0 text-[15px] font-bold text-good">{fmt(sh.amount)}</p>
+                        <p className="shrink-0 text-[15px] font-bold text-good">{fmt(t.amount)}</p>
                       </div>
                       <Button
                         variant={wasSent ? 'secondary' : 'soft'}
                         size="sm"
                         block
                         className="mt-2"
-                        onClick={() => charge(sh)}
+                        onClick={() => charge(t)}
                         icon={wasSent ? <Check className="size-4" /> : <MessageCircle className="size-4" />}
                       >
                         {wasSent ? 'Cobrar de nuevo' : 'Cobrar por WhatsApp'}
@@ -384,10 +468,35 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
                     </li>
                   )
                 })}
+                {fromMe.map((t) => (
+                  <SummaryRow
+                    key={`out-${t.to}`}
+                    left={<Avatar name={t.to} size={40} />}
+                    title={t.to}
+                    sub={`Le debes${done.dueDate ? ` · antes del ${fmtDateShort(done.dueDate)}` : ''}`}
+                    amount={fmt(t.amount)}
+                  />
+                ))}
+                {others.map((t) => (
+                  <SummaryRow
+                    key={`x-${t.from}-${t.to}`}
+                    left={<Avatar name={t.from} size={40} />}
+                    title={
+                      <span className="inline-flex items-center gap-1">
+                        {t.from} <ArrowRight className="size-3.5 text-muted" aria-label="le pasa a" /> {t.to}
+                      </span>
+                    }
+                    sub="Entre ellos (no se anota en tu cuenta)"
+                    amount={fmt(t.amount)}
+                  />
+                ))}
+                {done.transfers.length === 0 && (
+                  <SummaryRow left={<MeAvatar />} title="Quedaron a mano" sub="Nadie le debe nada a nadie" amount="✓" />
+                )}
               </ul>
             </div>
 
-            {done.others.length > 1 && (
+            {done.transfers.length > 1 && (
               <Button
                 variant="secondary"
                 block
@@ -395,7 +504,11 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
                 onClick={() =>
                   void sendText(
                     groupChargeText({
-                      shares: done.others,
+                      transfers: done.transfers.map((t) => ({
+                        ...t,
+                        from: t.fromMe ? myName : t.from,
+                        to: t.toMe ? myName : t.to,
+                      })),
                       total: done.total,
                       what: done.what,
                       fmt,
@@ -408,7 +521,9 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
             )}
 
             <p className="text-center text-xs text-muted">
-              Quedó anotado en Préstamos. Cuando te paguen, registra el abono ahí y vuelve a tu cuenta.
+              {toMe.length || fromMe.length
+                ? 'Quedó anotado en Préstamos. Cuando te paguen (o pagues), registra el abono ahí.'
+                : 'Tu parte quedó como gasto.'}
             </p>
           </div>
         )}
@@ -437,10 +552,73 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
     </p>
   ) : (
     <p className="text-center text-xs font-semibold text-ink-2" role="status">
-      {mine > 0 ? `Tu gasto ${fmt(mine)} · ` : 'Todo queda como préstamo · '}
-      <span className="text-good">Te deben {fmt(owed)}</span>
+      {mine > 0 ? `Tu gasto ${fmt(mine)}` : 'No es gasto tuyo'}
+      {owed > 0 && (
+        <>
+          {' · '}
+          <span className="text-good">Te deben {fmt(owed)}</span>
+        </>
+      )}
+      {iOwe > 0 && (
+        <>
+          {' · '}
+          <span className="text-bad">Debes {fmt(iOwe)}</span>
+        </>
+      )}
+      {owed === 0 && iOwe === 0 && ' · Quedan a mano'}
     </p>
   )
+
+  const amountRows = (
+    list: SplitParticipant[],
+    values: Record<string, string>,
+    setValues: (fn: (c: Record<string, string>) => Record<string, string>) => void,
+    computed: (k: string) => number,
+    hasResult: boolean,
+    over: boolean,
+    labelFor: (p: SplitParticipant) => string,
+  ) => (
+    <ul className="space-y-2">
+      {list.map((p) => {
+        const k = p.me ? ME : keyOf(p.name)
+        return (
+          <li key={k} className="flex items-center gap-3">
+            {p.me ? <MeAvatar size={36} /> : <Avatar name={p.name} size={36} />}
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold">{p.me ? 'Tú' : p.name}</span>
+            <MiniAmountInput
+              value={values[k] ?? ''}
+              onChange={(v) => setValues((c) => ({ ...c, [k]: v }))}
+              placeholder={p.amount === undefined && hasResult ? formatAmountInput(String(computed(k)), locale, decimals) : '0'}
+              label={labelFor(p)}
+              invalid={over && p.amount !== undefined}
+            />
+          </li>
+        )
+      })}
+    </ul>
+  )
+
+  const statusLine = (st: ReturnType<typeof assignStatus>, what: 'parts' | 'paid') =>
+    totalValue > 0 && (
+      <p
+        className={cx(
+          'mt-3 text-center text-xs font-semibold',
+          st.left < 0 ? 'text-bad' : st.open > 0 ? 'text-muted' : st.left > 0 ? 'text-warn' : 'text-good',
+        )}
+      >
+        {st.left < 0
+          ? `Te pasaste por ${fmt(-st.left)}`
+          : st.open > 0
+            ? st.left > 0
+              ? `Quedan ${fmt(st.left)} para ${st.open === 1 ? 'quien dejaste' : 'quienes dejaste'} en blanco`
+              : 'Ya está todo asignado'
+            : st.left > 0
+              ? what === 'paid'
+                ? `Falta anotar quién pagó ${fmt(st.left)}`
+                : `Falta asignar ${fmt(st.left)}`
+              : '✓ Cuadra con el total'}
+      </p>
+    )
 
   return (
     <Sheet
@@ -463,7 +641,7 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
           <Field label="¿Qué fue?">
             <Input
               value={what}
-              placeholder="Ej: Cena en Liguria, asado, Uber…"
+              placeholder="Ej: Cena en Liguria, regalo, Uber…"
               onChange={(e) => {
                 setWhat(e.target.value)
                 setLearned(null)
@@ -494,36 +672,27 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
               ))}
             </div>
           )}
-          {learned && iConsumed && <p className="mt-2 text-xs font-medium text-brand">{learned}</p>}
+          {learned && <p className="mt-2 text-xs font-medium text-brand">{learned}</p>}
         </div>
 
         {/* ───── Participantes ───── */}
         <Section label="¿Entre quiénes?">
           <div className="space-y-3 rounded-2xl bg-surface-2 p-3">
-            <div className="flex items-center gap-3">
-              <MeAvatar />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">Yo también consumí</p>
-                <p className="text-xs text-muted">
-                  {iConsumed ? 'Tu parte se anota como gasto' : 'No es gasto tuyo: todo queda como préstamo'}
-                </p>
-              </div>
-              <Toggle checked={iConsumed} onChange={setIConsumed} label="Yo también consumí" />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex h-9 items-center gap-2 rounded-full bg-brand-soft pr-3 pl-1 text-sm font-semibold text-brand">
+                <MeAvatar size={28} />
+                Tú
+              </span>
+              {people.map((p) => (
+                <motion.span key={keyOf(p)} initial={{ scale: 0.85 }} animate={{ scale: 1 }} className="inline-flex">
+                  <Chip active onClick={() => removePerson(p)} className="max-w-full pr-2.5">
+                    <span className="max-w-40 truncate">{p}</span>
+                    <X className="size-3.5 shrink-0" aria-hidden />
+                    <span className="sr-only">Quitar a {p}</span>
+                  </Chip>
+                </motion.span>
+              ))}
             </div>
-
-            {people.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {people.map((p) => (
-                  <motion.span key={keyOf(p)} initial={{ scale: 0.85 }} animate={{ scale: 1 }} className="inline-flex">
-                    <Chip active onClick={() => removePerson(p)} className="max-w-full pr-2.5">
-                      <span className="max-w-40 truncate">{p}</span>
-                      <X className="size-3.5 shrink-0" aria-hidden />
-                      <span className="sr-only">Quitar a {p}</span>
-                    </Chip>
-                  </motion.span>
-                ))}
-              </div>
-            )}
 
             <form
               className="flex gap-2"
@@ -567,91 +736,128 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
           </div>
         </Section>
 
-        {/* ───── Reparto ───── */}
         {people.length > 0 && (
-          <div className="space-y-3">
-            <Segmented
-              value={mode}
-              onChange={setMode}
-              options={[
-                { value: 'equal', label: 'Partes iguales' },
-                { value: 'custom', label: 'Montos distintos' },
-              ]}
-            />
-            {mode === 'custom' && (
-              <div className="rounded-2xl bg-surface-2 p-3">
-                <p className="mb-2 text-xs text-muted">Deja en blanco a quien se lleva lo que falte (en partes iguales).</p>
-                <ul className="space-y-2">
-                  {participants.map((p) => {
-                    const k = p.me ? ME : keyOf(p.name)
-                    return (
-                      <li key={k} className="flex items-center gap-3">
-                        {p.me ? <MeAvatar size={36} /> : <Avatar name={p.name} size={36} />}
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{p.me ? 'Tú' : p.name}</span>
-                        <MiniAmountInput
-                          value={custom[k] ?? ''}
-                          onChange={(v) => setCustom((c) => ({ ...c, [k]: v }))}
-                          placeholder={
-                            p.amount === undefined && shares ? formatAmountInput(String(shareOf(k)), locale, decimals) : '0'
-                          }
-                          label={p.me ? 'Tu parte' : `Parte de ${p.name}`}
-                          invalid={!!split && !split.ok && split.error.code === 'over' && p.amount !== undefined}
-                        />
-                      </li>
-                    )
-                  })}
-                </ul>
-                {totalValue > 0 && (
-                  <p
-                    className={cx(
-                      'mt-3 text-center text-xs font-semibold',
-                      status.left < 0 ? 'text-bad' : status.open > 0 ? 'text-muted' : status.left > 0 ? 'text-warn' : 'text-good',
-                    )}
-                  >
-                    {status.left < 0
-                      ? `Te pasaste por ${fmt(-status.left)}`
-                      : status.open > 0
-                        ? status.left > 0
-                          ? `Quedan ${fmt(status.left)} para ${status.open === 1 ? 'quien dejaste' : 'quienes dejaste'} en blanco`
-                          : 'Ya está todo asignado'
-                        : status.left > 0
-                          ? `Falta asignar ${fmt(status.left)}`
-                          : '✓ Cuadra con el total'}
+          <>
+            {/* ───── Quién pagó ───── */}
+            <Section label="¿Quién pagó?">
+              <Segmented
+                value={payMode}
+                onChange={setPayMode}
+                options={[
+                  { value: 'me', label: 'Pagué yo' },
+                  { value: 'many', label: 'Pagamos varios' },
+                ]}
+              />
+              {payMode === 'many' && (
+                <div className="mt-3 rounded-2xl bg-surface-2 p-3">
+                  <p className="mb-2 text-xs text-muted">
+                    Anota cuánto pagó cada uno en la caja. Si dejas a alguien en blanco, pagó lo que falta.
                   </p>
-                )}
-              </div>
-            )}
-          </div>
+                  {amountRows(
+                    payers,
+                    paidInput,
+                    setPaidInput,
+                    paidOf,
+                    !!paid,
+                    !!paidSplit && !paidSplit.ok && paidSplit.error.code === 'over',
+                    (p) => (p.me ? 'Lo que pagaste' : `Lo que pagó ${p.name}`),
+                  )}
+                  {statusLine(payStatus, 'paid')}
+                </div>
+              )}
+            </Section>
+
+            {/* ───── Reparto ───── */}
+            <Section label="¿Cuánto le toca a cada uno?">
+              <Segmented
+                value={mode}
+                onChange={setMode}
+                options={[
+                  { value: 'equal', label: 'Partes iguales' },
+                  { value: 'custom', label: 'Montos distintos' },
+                ]}
+              />
+              {mode === 'custom' && (
+                <div className="mt-3 rounded-2xl bg-surface-2 p-3">
+                  <p className="mb-2 text-xs text-muted">
+                    Lo que consumió cada uno. Pon 0 a quien no consumió y deja en blanco a quien se lleva lo que falte.
+                  </p>
+                  {amountRows(
+                    participants,
+                    custom,
+                    setCustom,
+                    shareOf,
+                    !!shares,
+                    !!split && !split.ok && split.error.code === 'over',
+                    (p) => (p.me ? 'Tu parte' : `Parte de ${p.name}`),
+                  )}
+                  {statusLine(status, 'parts')}
+                </div>
+              )}
+            </Section>
+          </>
         )}
 
         {/* ───── Resumen en vivo ───── */}
-        {shares && totalValue > 0 && (
+        {plan && totalValue > 0 && (
           <div className="rounded-3xl border border-line p-4" aria-live="polite">
             <p className="mb-1 text-xs font-semibold tracking-wide text-muted uppercase">Así queda</p>
             <ul className="divide-y divide-line">
-              {iConsumed && <SummaryRow left={<MeAvatar size={36} />} title="Tu parte" sub="Gasto" amount={fmt(mine)} />}
-              {others.map((s) => (
+              <SummaryRow
+                left={<MeAvatar size={36} />}
+                title="Tu parte"
+                sub={mine > 0 ? (payMode === 'many' ? `Gasto · pagaste ${fmt(myPaid)}` : 'Gasto') : 'No consumiste'}
+                amount={fmt(mine)}
+              />
+              {owedToMe.map((l) => (
                 <SummaryRow
-                  key={s.name}
-                  left={<Avatar name={s.name} size={36} />}
-                  title={s.name}
+                  key={`in-${l.person}`}
+                  left={<Avatar name={l.person} size={36} />}
+                  title={l.person}
                   sub="Te debe"
-                  amount={fmt(s.amount)}
+                  amount={fmt(l.amount)}
                 />
               ))}
+              {iOweTo.map((l) => (
+                <SummaryRow
+                  key={`out-${l.person}`}
+                  left={<Avatar name={l.person} size={36} />}
+                  title={l.person}
+                  sub="Le debes"
+                  amount={fmt(l.amount)}
+                />
+              ))}
+              {between.map((t) => (
+                <SummaryRow
+                  key={`x-${t.from}-${t.to}`}
+                  left={<Avatar name={t.from} size={36} />}
+                  title={
+                    <span className="inline-flex items-center gap-1">
+                      {t.from} <ArrowRight className="size-3.5 text-muted" aria-label="le pasa a" /> {t.to}
+                    </span>
+                  }
+                  sub="Entre ellos"
+                  amount={fmt(t.amount)}
+                />
+              ))}
+              {owed === 0 && iOwe === 0 && between.length === 0 && (
+                <SummaryRow left={<MeAvatar size={36} />} title="Quedan a mano" sub="Nadie le debe nada a nadie" amount="✓" />
+              )}
             </ul>
             <p className="mt-2 border-t border-line pt-2 text-xs text-muted">
-              Sale {fmt(totalValue)} de tu cuenta: {mine > 0 ? `${fmt(mine)} como gasto y ` : ''}
-              {fmt(owed)} como préstamo hasta que te paguen.
+              {myPaid > 0 ? `Sale ${fmt(myPaid)} de tu cuenta` : 'No sale nada de tu cuenta'}
+              {mine > 0 ? `: ${fmt(mine)} es tu gasto` : ''}
+              {owed > 0 ? ` y ${fmt(owed)} queda como préstamo hasta que te paguen` : ''}
+              {iOwe > 0 ? `${myPaid > 0 || mine > 0 ? '. ' : ': '}Debes ${fmt(iOwe)} hasta que lo pagues` : ''}.
             </p>
           </div>
         )}
 
-        <Section label="Pagaste con">
+        <Section label={myPaid > 0 || payMode === 'me' ? 'Pagaste con' : 'Cuenta'}>
           <AccountChips accounts={store.accounts} value={accountId} onChange={setAccountId} />
         </Section>
 
-        {iConsumed && (
+        {(mine > 0 || !plan) && (
           <Section label="Categoría de tu parte">
             <CategoryGrid
               categories={expenseCats}
@@ -689,19 +895,27 @@ export const SplitSheet = ({ open, onClose }: { open: boolean; onClose: () => vo
           </div>
         </Section>
 
-        <Section
-          label="¿Cuándo cobrar?"
-          hint={dueDate ? `Vence el ${fmtDate(dueDate)}. Lo verás en Préstamos.` : 'Sin plazo: te deben hasta que te paguen.'}
-        >
-          <div className="flex flex-wrap gap-2">
-            <Chip active={!collectWeek} onClick={() => setCollectWeek(false)}>
-              Sin plazo
-            </Chip>
-            <Chip active={collectWeek} onClick={() => setCollectWeek(true)}>
-              Cobrar en 1 semana
-            </Chip>
-          </div>
-        </Section>
+        {(owed > 0 || iOwe > 0 || !plan) && (
+          <Section
+            label={onlyIOwe ? '¿Cuándo pagar?' : '¿Cuándo cobrar?'}
+            hint={
+              dueDate
+                ? `Vence el ${fmtDate(dueDate)}. Lo verás en Préstamos.`
+                : onlyIOwe
+                  ? 'Sin plazo: lo debes hasta que lo pagues.'
+                  : 'Sin plazo: te deben hasta que te paguen.'
+            }
+          >
+            <div className="flex flex-wrap gap-2">
+              <Chip active={!collectWeek} onClick={() => setCollectWeek(false)}>
+                Sin plazo
+              </Chip>
+              <Chip active={collectWeek} onClick={() => setCollectWeek(true)}>
+                {onlyIOwe ? 'Pagar en 1 semana' : 'Cobrar en 1 semana'}
+              </Chip>
+            </div>
+          </Section>
+        )}
       </div>
     </Sheet>
   )

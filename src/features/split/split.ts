@@ -150,6 +150,56 @@ export const assignStatus = (total: number, participants: SplitParticipant[], de
   }
 }
 
+/* ───────────── Quién pagó y quién le debe a quién ───────────── */
+
+/** Una transferencia para quedar a mano: `from` le pasa `amount` a `to` (índices de `shares`) */
+export interface SplitTransfer {
+  from: number
+  to: number
+  amount: number
+}
+
+/**
+ * Quién le pasa cuánto a quién para que cada uno termine pagando solo su parte.
+ *
+ * - `paid[i]` es lo que pagó cada uno en la caja (mismo orden que `shares`); debe sumar lo mismo
+ *   que las partes. Lo que alguien pagó de más se lo devuelven los que pagaron de menos.
+ * - A quien pagó de más le pagan primero "yo" (si debo) y luego los demás en orden; si "yo" pagué
+ *   de más, los que deben me pagan primero a mí. Así casi todo lo que hay que anotar pasa por mí.
+ * - Lanza `SplitError('mismatch')` si lo pagado no suma el total.
+ */
+export const settleSplit = (shares: SplitShare[], paid: number[], decimals = 0): SplitTransfer[] => {
+  if (paid.length !== shares.length || paid.some((p) => !isValidAmount(p)))
+    throw new SplitError('invalid', 'Revisa cuánto pagó cada uno.')
+  const shareMinor = shares.map((s) => toMinor(s.amount, decimals))
+  const paidMinor = paid.map((p) => toMinor(p, decimals))
+  const diff = paidMinor.reduce((a, b) => a + b, 0) - shareMinor.reduce((a, b) => a + b, 0)
+  if (diff !== 0)
+    throw new SplitError(
+      'mismatch',
+      diff > 0 ? 'Lo pagado suma más que el total.' : 'Lo pagado no alcanza el total.',
+      fromMinor(Math.abs(diff), decimals),
+    )
+  const net = paidMinor.map((p, i) => p - shareMinor[i])
+  // "Yo" primero; después, el orden en que se agregaron
+  const order = shares.map((_, i) => i).sort((a, b) => Number(shares[b].me) - Number(shares[a].me) || a - b)
+  const creditors = order.filter((i) => net[i] > 0).map((i) => ({ i, left: net[i] }))
+  const debtors = order.filter((i) => net[i] < 0).map((i) => ({ i, left: -net[i] }))
+  const out: SplitTransfer[] = []
+  let c = 0
+  for (const d of debtors) {
+    while (d.left > 0 && c < creditors.length) {
+      const cr = creditors[c]
+      const amount = Math.min(d.left, cr.left)
+      out.push({ from: d.i, to: cr.i, amount: fromMinor(amount, decimals) })
+      d.left -= amount
+      cr.left -= amount
+      if (cr.left === 0) c++
+    }
+  }
+  return out
+}
+
 /* ───────────── Mensajes para cobrar ───────────── */
 
 type Fmt = (n: number) => string
@@ -161,10 +211,14 @@ const firstName = (name: string) => name.trim().split(/\s+/)[0] || name.trim()
 export interface ChargeTextInput {
   /** Persona a la que se le cobra */
   name: string
-  /** Su parte */
+  /** Lo que me tiene que pasar */
   amount: number
   /** Total de la cuenta */
   total: number
+  /** Su parte (si pagó algo, se explica de dónde sale `amount`) */
+  share?: number
+  /** Lo que ya pagó en la caja */
+  paid?: number
   /** "¿Qué fue?" (opcional): "Cena en Liguria", "Asado"… */
   what?: string
   /** Formateador de dinero (debe mostrar el monto aunque la app oculte montos) */
@@ -176,33 +230,50 @@ export interface ChargeTextInput {
 /**
  * Texto para cobrar por WhatsApp:
  * "Hola Pedro! Cena en Liguria salió $30.000, tu parte es $10.000 🙌"
+ * Si pagó una parte: "… tu parte es $15.750. Como pagaste $6.500, me pasas $9.250 🙌"
  */
-export const chargeText = ({ name, amount, total, what, fmt, due }: ChargeTextInput): string => {
+export const chargeText = ({ name, amount, total, share, paid, what, fmt, due }: ChargeTextInput): string => {
   const subject = what?.trim() ? capitalize(what.trim()) : 'La cuenta'
   const greeting = name.trim() ? `Hola ${firstName(name)}!` : 'Hola!'
   const dueText = due ? ` ¿Me lo pasas antes del ${due}? 😊` : ''
+  if (paid && paid > 0 && share !== undefined)
+    return `${greeting} ${subject} salió ${fmt(total)}, tu parte es ${fmt(share)}. Como pagaste ${fmt(paid)}, me pasas ${fmt(amount)} 🙌${dueText}`
   return `${greeting} ${subject} salió ${fmt(total)}, tu parte es ${fmt(amount)} 🙌${dueText}`
+}
+
+/** Una línea del resumen: quién le pasa cuánto a quién (con nombres) */
+export interface NamedTransfer {
+  from: string
+  to: string
+  amount: number
+  /** `to` soy yo */
+  toMe?: boolean
+  /** `from` soy yo */
+  fromMe?: boolean
 }
 
 /**
  * Resumen para mandar a un grupo:
- * "Asado salió $30.000. Pedro: $10.000 · Juan: $10.000 🙌"
+ * "Asado salió $30.000. Pedro: $10.000 · Juan: $10.000 🙌" (todos me pagan a mí)
+ * "Asado salió $30.000. Para quedar a mano: Pedro → Benja $10.000 · Juan → Cami $5.000 🙌"
  */
 export const groupChargeText = ({
-  shares,
+  transfers,
   total,
   what,
   fmt,
 }: {
-  shares: SplitShare[]
+  transfers: NamedTransfer[]
   total: number
   what?: string
   fmt: Fmt
 }): string => {
   const subject = what?.trim() ? capitalize(what.trim()) : 'La cuenta'
-  const others = shares.filter((s) => !s.me && s.amount > 0)
-  const list = others.map((s) => `${s.name.trim()}: ${fmt(s.amount)}`).join(' · ')
-  return `${subject} salió ${fmt(total)}. ${list} 🙌`
+  const lines = transfers.filter((t) => t.amount > 0)
+  if (lines.every((t) => t.toMe))
+    return `${subject} salió ${fmt(total)}. ${lines.map((t) => `${t.from.trim()}: ${fmt(t.amount)}`).join(' · ')} 🙌`
+  const list = lines.map((t) => `${t.from.trim()} → ${t.to.trim()} ${fmt(t.amount)}`).join(' · ')
+  return `${subject} salió ${fmt(total)}. Para quedar a mano: ${list} 🙌`
 }
 
 /* ───────────── Qué se guarda ───────────── */
@@ -212,31 +283,61 @@ type NewLoan = Omit<Loan, 'id' | 'createdAt' | 'payments'>
 
 export interface SplitPlanInput {
   shares: SplitShare[]
+  /** Cuánto pagó cada uno en la caja (mismo orden que `shares`). Sin esto: pagué todo yo. */
+  paid?: number[]
+  decimals?: number
   what?: string
   accountId: ID
   categoryId?: ID
   date: DateStr
-  /** Plazo para cobrar (opcional) */
+  /** Plazo para quedar a mano (opcional) */
   dueDate?: DateStr
   splitId: ID
 }
 
 export interface SplitPlan {
-  /** Mi gasto (solo si mi parte es mayor a 0) */
+  /** Mi gasto: solo mi parte (si es mayor a 0) */
   expense?: NewTx
-  /** Un préstamo "yo presté" por cada persona con parte mayor a 0 */
+  /** "Yo presté" a quien me debe y "Me prestaron" a quien le debo, uno por persona */
   loans: NewLoan[]
+  /** Todo lo que hay que pasarse para quedar a mano, con nombres (incluye lo que no pasa por mí) */
+  transfers: NamedTransfer[]
+  /** Lo que pagué yo (lo que realmente sale de mi cuenta) */
+  myPaid: number
+  /** Mi parte */
+  mine: number
 }
 
 /**
- * Arma lo que se registra: un gasto solo por mi parte y un préstamo "yo presté" por cada persona,
- * todos desde la misma cuenta y con el mismo `splitId`. Así la cuenta baja el total completo,
- * solo mi parte cuenta como gasto y lo demás queda en "Te deben".
+ * Arma lo que se registra: un gasto solo por mi parte y, por cada persona con la que quedo
+ * debiendo o me queda debiendo, un préstamo, todos desde la misma cuenta y con el mismo `splitId`.
+ * Así la cuenta baja exactamente lo que pagué, solo mi parte cuenta como gasto, lo que me deben
+ * queda en "Te deben" y lo que debo, en "Debes".
  */
-export const planSplit = ({ shares, what, accountId, categoryId, date, dueDate, splitId }: SplitPlanInput): SplitPlan => {
+export const planSplit = ({
+  shares,
+  paid,
+  decimals = 0,
+  what,
+  accountId,
+  categoryId,
+  date,
+  dueDate,
+  splitId,
+}: SplitPlanInput): SplitPlan => {
   const label = what?.trim() || undefined
-  const mine = shares.filter((s) => s.me).reduce((sum, s) => sum + s.amount, 0)
-  const people = shares.filter((s) => s.amount > 0).length
+  const total = fromMinor(
+    shares.reduce((s, x) => s + toMinor(x.amount, decimals), 0),
+    decimals,
+  )
+  // Si "yo" no está en la lista (no consumí) igual soy quien pagó: se me agrega con parte 0
+  const all: SplitShare[] = shares.some((s) => s.me) ? shares : [{ name: 'Tú', me: true, amount: 0 }, ...shares]
+  const paidAll = paid ? (shares.some((s) => s.me) ? paid : [0, ...paid]) : all.map((s) => (s.me ? total : 0))
+  const transfers = settleSplit(all, paidAll, decimals)
+
+  const mineMinor = all.filter((s) => s.me).reduce((sum, s) => sum + toMinor(s.amount, decimals), 0)
+  const mine = fromMinor(mineMinor, decimals)
+  const people = all.filter((s) => s.amount > 0).length
   const expense: NewTx | undefined =
     mine > 0
       ? {
@@ -250,17 +351,39 @@ export const planSplit = ({ shares, what, accountId, categoryId, date, dueDate, 
           splitId,
         }
       : undefined
-  const loans: NewLoan[] = shares
-    .filter((s) => !s.me && s.amount > 0)
-    .map((s) => ({
-      direction: 'lent',
-      person: s.name.trim(),
-      amount: s.amount,
+
+  const note = label ? `Parte de ${label}` : 'Parte de una cuenta dividida'
+  const loans: NewLoan[] = []
+  for (const t of transfers) {
+    const fromMe = all[t.from].me
+    const toMe = all[t.to].me
+    if (fromMe === toMe || t.amount <= 0) continue
+    loans.push({
+      direction: toMe ? 'lent' : 'borrowed',
+      person: (toMe ? all[t.from] : all[t.to]).name.trim(),
+      amount: t.amount,
       date,
       dueDate: dueDate || undefined,
       accountId,
-      note: label ? `Parte de ${label}` : 'Parte de una cuenta dividida',
+      note,
       splitId,
-    }))
-  return { expense, loans }
+    })
+  }
+  const myPaid = fromMinor(
+    all.reduce((sum, s, i) => sum + (s.me ? toMinor(paidAll[i], decimals) : 0), 0),
+    decimals,
+  )
+  return {
+    expense,
+    loans,
+    transfers: transfers.map((t) => ({
+      from: all[t.from].name,
+      to: all[t.to].name,
+      amount: t.amount,
+      toMe: all[t.to].me,
+      fromMe: all[t.from].me,
+    })),
+    myPaid,
+    mine,
+  }
 }
