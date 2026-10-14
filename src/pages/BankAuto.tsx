@@ -507,18 +507,9 @@ export default function BankAuto() {
           <div className="flex gap-3 text-sm text-ink-2">
             <ShieldCheck className="mt-0.5 size-5 shrink-0 text-good" />
             <div className="space-y-2">
-              <p>
-                Cada aviso espera en tu cuenta de Supabase hasta que lo revisas y <b>solo tú lo ves</b> (ni tus amigos). Apenas lo
-                agregas o lo descartas, se borra; los que nunca revises, a los 90 días.
-              </p>
-              <p>
-                Las claves dinámicas y códigos del banco no se guardan nunca, y lo que no es un movimiento (promociones, saldos)
-                se borra al tiro.
-              </p>
-              <p>
-                Tu clave personal solo sirve para dejar avisos en tu buzón: no deja leerlos ni ver tus datos. No compartas tu
-                macro ni tu atajo (llevan la clave) y, si crees que alguien la tiene, genera una nueva.
-              </p>
+              <p>Solo tú ves tus avisos. Apenas los agregas o descartas, se borran.</p>
+              <p>Nunca guardamos tus claves ni códigos del banco.</p>
+              <p>No compartas tu clave personal. Si crees que alguien la tiene, genera una nueva.</p>
             </div>
           </div>
         </Card>
