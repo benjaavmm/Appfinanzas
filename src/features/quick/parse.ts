@@ -9,9 +9,10 @@ import { suggestCategory } from '../../lib/categorize'
 import { addDaysStr, parseDate, toDateStr, weekdayIndex } from '../../lib/dates'
 import { normalizeText } from '../../lib/format'
 import { learnPlace } from '../../lib/insights'
-import type { Account, AccountType, Category, DateStr, Transaction } from '../../lib/types'
+import type { Account, AccountType, Category, DateStr, Transaction, AssistantAlias } from '../../lib/types'
 import { CURRENCY_WORDS, findAmount, fold, MULTIPLIERS, NUMBER_WORDS, parseDigits, splitNumberSuffix } from './amount'
 import { keywordCategory } from './keywords'
+import { matchAlias } from '../../lib/aliases'
 
 export interface QuickParse {
   intent: 'expense' | 'income' | 'lent' | 'borrowed'
@@ -41,6 +42,8 @@ export interface QuickContext {
   categories: Category[]
   transactions: Transaction[]
   today: string
+  /** Palabras que le enseñaste al asistente ("la micro" → Transporte) */
+  aliases?: Record<string, AssistantAlias>
 }
 
 interface Tok {
@@ -723,6 +726,16 @@ export const parseQuickText = (text: string, ctx: QuickContext): QuickParse => {
         result.venue = true
       }
     }
+    // Lo que le enseñaste al asistente manda sobre las sugerencias
+    const taught = matchAlias(desc.map((t) => t.raw).join(' '), ctx.aliases)
+    if (taught?.place) {
+      result.place = taught.place
+      result.venue = true
+      const s = suggestCategory(taught.place, kind, { transactions: ctx.transactions, categories: ctx.categories })
+      categoryId = validCategory(ctx, s.categoryId, kind) ?? categoryId
+    }
+    const taughtCat = validCategory(ctx, taught?.categoryId, kind)
+    if (taughtCat) categoryId = taughtCat
     categoryId ??= validCategory(
       ctx,
       keywordCategory(

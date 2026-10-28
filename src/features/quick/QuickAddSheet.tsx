@@ -49,6 +49,7 @@ export const QuickAddSheet = ({ open, onClose, text: initialText, voice }: Props
   const categories = useStore((s) => s.categories)
   const transactions = useStore((s) => s.transactions)
   const defaultAccountId = useStore((s) => s.settings.defaultAccountId)
+  const aliases = useStore((s) => s.settings.assistant?.aliases)
   const today = useToday()
   const fmt = useMoney()
   const { decimals } = useCurrency()
@@ -65,8 +66,8 @@ export const QuickAddSheet = ({ open, onClose, text: initialText, voice }: Props
   }, [voice, startDictation])
 
   const parsed = useMemo(
-    () => parseQuickText(text, { accounts, categories, transactions, today }),
-    [text, accounts, categories, transactions, today],
+    () => parseQuickText(text, { accounts, categories, transactions, today, aliases }),
+    [text, accounts, categories, transactions, today, aliases],
   )
 
   const isLoan = parsed.intent === 'lent' || parsed.intent === 'borrowed'

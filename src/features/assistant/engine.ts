@@ -43,6 +43,18 @@ import { keywordCategory } from '../quick/keywords'
 export type { Fmt, Reply, ReplyAction, ReplyRow } from './types'
 import type { Fmt, Reply, ReplyRow } from './types'
 import { affordReply, readInstallments } from './afford'
+import {
+  debtPlanReply,
+  futureReply,
+  groupsReply,
+  readExtraIntent,
+  readLearning,
+  warrantyReply,
+  whatYouKnowReply,
+  wrappedReply,
+} from './extras'
+import type { Group } from '../groups/balance'
+import { matchAlias } from '../../lib/aliases'
 import { looksLikeBankText } from '../bank/parse'
 import { APP_KNOWLEDGE, FINANCE_KNOWLEDGE, type KnowledgeEntry } from './knowledge'
 import { DEFAULT_BOT_NAME, DEFAULT_PERSONALITY, PERSONALITIES, type Moment, type PersonalityId } from './personality'
@@ -141,6 +153,11 @@ type Intent =
   | 'installments'
   | 'subDetail'
   | 'monthlyAvg'
+  | 'future'
+  | 'debtPlan'
+  | 'warranty'
+  | 'groups'
+  | 'wrapped'
 
 export const STARTER_SUGGESTIONS = [
   '¿Cómo voy este mes?',
@@ -278,6 +295,10 @@ const STOP = new Set([
 
 const readSubject = (q: string, words: string[], data: FinanceData): Subject => {
   const s: Subject = {}
+  // Lo que le enseñaste ("la micro" → Transporte, "el chino" → Almacén Don Pepe)
+  const taught = matchAlias(q, data.settings.assistant?.aliases)
+  if (taught?.categoryId) s.category = data.categories.find((c) => c.id === taught.categoryId)
+  if (taught?.place) s.place = taught.place
   // Categoría por su nombre ("comida", "transporte") o por palabras clave ("uber" → transporte)
   const cats = data.categories.filter((c) => c.kind === 'expense' || c.kind === 'income')
   const GENERIC = new Set([
@@ -305,14 +326,14 @@ const readSubject = (q: string, words: string[], data: FinanceData): Subject => 
             words.some((w) => w === part || (w.length >= 5 && part.startsWith(w)) || (part.length >= 5 && w.startsWith(part))),
         ),
     )
-  if (byName.length) s.category = byName.sort((a, b) => b.k.length - a.k.length)[0].c
+  if (byName.length && !s.category) s.category = byName.sort((a, b) => b.k.length - a.k.length)[0].c
   // Lugares de tu historial ("Líder", "Uber")
   const places = topPlaces(data.transactions, 200)
   const place = places
     .map((p) => ({ p, k: fold(p.name) }))
     .filter(({ k }) => k.length >= 3 && new RegExp(`(^|\\s)${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`).test(q))
     .sort((a, b) => b.k.length - a.k.length)[0]
-  if (place) s.place = place.p.name
+  if (place && !s.place) s.place = place.p.name
   if (!s.category && !s.place) {
     const id = keywordCategory(
       words.filter((w) => !STOP.has(w)),
@@ -386,6 +407,9 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
       ))
   )
     return 'afford'
+  // Lo más nuevo (tu yo del futuro, deudas, garantías, grupos, tu mes en lucas): frases específicas
+  const extra = readExtraIntent(q)
+  if (extra) return extra
   if (/\bsi (ahorro|ahorrara|junto|guardo|aparto)\b/.test(q)) return 'savePlan'
   if (has(q, 'cuantas veces', 'cuantos pedidos', 'cuantas compras', 'con que frecuencia', 'cada cuanto')) return 'count'
   if (has(q, 'ultima vez', 'cuando fue que', 'cuando fui', 'cuando pague', 'cuando compre', 'cuando pedi')) return 'lastTime'
@@ -1417,6 +1441,9 @@ export interface AssistantPrefs {
   personality?: PersonalityId
   /** Número de mensaje en la conversación (para variar las frases) */
   turn?: number
+  /** Tus grupos (vienen de la nube) y si hay sesión */
+  groups?: Group[]
+  signedIn?: boolean
 }
 
 const hash = (s: string) => {
@@ -1460,7 +1487,7 @@ export const welcome = (data: FinanceData, today: DateStr, fmt: Fmt, prefs: Assi
 }
 
 const CAPABILITIES =
-  'Te respondo con los datos de tu app: cuánto gastaste y en qué, cómo vas este mes, quién te debe, tu tarjeta y sus cuotas, si te alcanza para algo, cuánto ahorraste y qué pagos se vienen. También te explico cómo usar la app y conceptos como el **CAE** o el **cupo**. Y si me dices **"gasté 5 lucas en uber"**, te ayudo a anotarlo.'
+  'Te respondo con los datos de tu app: cuánto gastaste y en qué, cómo vas este mes, quién te debe, tu tarjeta y sus cuotas, si te alcanza para algo (con el interés de las cuotas), **cuánto tienes comprometido en los próximos meses**, **cómo salir de tus deudas**, tus **garantías**, tus **grupos** y **tu mes en lucas**. También te explico cómo usar la app y conceptos como el **CAE** o el **cupo**. Si me dices **"gasté 5 lucas en uber"**, lo anoto. Y aprendo de ti: dime **"cuando digo la micro me refiero a transporte"**.'
 
 const SMALLTALK_FALLBACK: Partial<Record<Moment, string>> = {
   thanks: '¡De nada! 😊',
@@ -1535,6 +1562,15 @@ export const answer = (
     if (memory.intent === 'status' || !memory.intent)
       return done({ text: explainProjection(data, today, fmt), kind: 'why' }, { ...memory, why: undefined })
   }
+
+  // Lo que le enseñas: "cuando digo la micro me refiero a transporte", "me pagan el 25", "¿qué sabes de mí?"
+  const learnCmd = readLearning(q, question, data)
+  if (learnCmd)
+    return done(
+      learnCmd.kind === 'whatYouKnow'
+        ? whatYouKnowReply(data)
+        : { text: learnCmd.text, learn: learnCmd.effect, kind: 'learn', mood: 'good' },
+    )
 
   // "ok", "dale", "sí": se sigue la conversación
   if (/^(ok|oka|okey|okis|dale|vale|listo|ya|si|no|bueno|perfecto|entiendo|ah+|mm+|y|ya veo|bacan|filo)$/.test(q))
@@ -1657,6 +1693,16 @@ export const answer = (
         return subject.subscription ? subDetailReply(data, subject.subscription, today, fmt, q) : subsReply(data, today, fmt)
       case 'monthlyAvg':
         return monthlyAvgReply(data, subject, today, fmt)
+      case 'future':
+        return futureReply(data, today, fmt, q)
+      case 'debtPlan':
+        return debtPlanReply(data, today, fmt)
+      case 'warranty':
+        return warrantyReply(data, today, fmt, q)
+      case 'groups':
+        return groupsReply(prefs.groups, q, data.settings.locale, !!prefs.signedIn)
+      case 'wrapped':
+        return wrappedReply(data, today, fmt, q)
       case 'balance':
         return subject.accountId ? accountReply(data, subject.accountId, today, fmt) : balanceReply(data, fmt)
       case 'owedToMe':

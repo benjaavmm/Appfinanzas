@@ -1,6 +1,6 @@
 /** Tipos compartidos del asistente */
 import type { SheetState } from '../../lib/ui'
-import type { Transaction } from '../../lib/types'
+import type { AssistantAlias, Transaction } from '../../lib/types'
 import type { Moment } from './personality'
 
 export type Fmt = (n: number, opts?: { sign?: boolean }) => string
@@ -35,4 +35,13 @@ export interface Reply {
   txs?: Transaction[]
   actions?: ReplyAction[]
   suggestions?: string[]
+  /** Algo que el asistente aprendió y la app debe guardar */
+  learn?: LearnEffect
 }
+
+/** Lo que el asistente aprende de ti (la app lo guarda en tus ajustes) */
+export type LearnEffect =
+  | { kind: 'alias'; word: string; alias: AssistantAlias }
+  | { kind: 'forget'; word: string }
+  | { kind: 'payday'; day: number | null }
+  | { kind: 'name'; name: string }

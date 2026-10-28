@@ -293,7 +293,8 @@ export const FINANCE_KNOWLEDGE: KnowledgeEntry[] = [
     title: 'Métodos bola de nieve y avalancha',
     answer:
       'Son dos formas de salir de varias deudas: pagas **lo mínimo en todas** y todo lo extra lo pones en una sola. Con la **bola de nieve** atacas primero la **más chica**, y cuando la terminas sumas esa cuota a la siguiente; motiva harto porque ves avances rápido. Con la **avalancha** partes por la de **mayor tasa o CAE**, que es la que más te cuesta, y así pagas **menos intereses** en total.',
-    related: ['¿Qué es refinanciar o consolidar deudas?', '¿Qué es la CAE?'],
+    action: { label: 'Armar mi plan', kind: 'nav', to: '/deudas' },
+    related: ['¿Cómo salgo de mis deudas?', '¿Qué es refinanciar o consolidar deudas?'],
   },
   {
     id: 'refinanciar-consolidar',

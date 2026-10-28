@@ -6,6 +6,9 @@ import { useData, useMoney, useToday, vibrate } from '../lib/hooks'
 import { useStore } from '../lib/store'
 import { openSheet } from '../lib/ui'
 import { answer, welcome, type AssistantPrefs, type ChatMemory, type Reply, type ReplyAction } from '../features/assistant/engine'
+import type { LearnEffect } from '../features/assistant/types'
+import { useGroups } from '../lib/cloud/groups'
+import { useAuth } from '../lib/cloud/auth'
 import { DEFAULT_BOT_NAME, DEFAULT_PERSONALITY, PERSONALITIES, type PersonalityId } from '../features/assistant/personality'
 import { useDictation } from '../features/quick/speech'
 import { TxItem } from '../components/TxItem'
@@ -199,6 +202,18 @@ const PersonalityPanel = ({ onDone }: { onDone: () => void }) => {
   )
 }
 
+/** Guarda lo que el asistente aprendió en tus ajustes */
+const applyLearning = (l: LearnEffect) => {
+  const st = useStore.getState()
+  const a = st.settings.assistant ?? {}
+  if (l.kind === 'name') return st.updateSettings({ userName: l.name })
+  if (l.kind === 'payday') return st.updateSettings({ assistant: { ...a, payday: l.day ?? undefined } })
+  const aliases = { ...(a.aliases ?? {}) }
+  if (l.kind === 'alias') aliases[l.word] = l.alias
+  else delete aliases[l.word]
+  st.updateSettings({ assistant: { ...a, aliases } })
+}
+
 export default function Assistant() {
   const data = useData()
   const today = useToday()
@@ -208,9 +223,13 @@ export default function Assistant() {
   const [text, setText] = useState('')
   const [editing, setEditing] = useState(false)
   const assistant = data.settings.assistant
+  const groups = useGroups((s) => s.groups)
+  const signedIn = useAuth((s) => s.status === 'signedIn')
   const prefs: AssistantPrefs = {
     botName: assistant?.name?.trim() || DEFAULT_BOT_NAME,
     personality: isPersonality(assistant?.personality) ? assistant.personality : DEFAULT_PERSONALITY,
+    groups,
+    signedIn,
   }
   const persona = PERSONALITIES[prefs.personality!]
   const hello = msgs.length === 0 ? welcome(data, today, fmt, prefs) : null
@@ -243,6 +262,8 @@ export default function Assistant() {
     window.clearTimeout(timer.current)
     const turn = useChat.getState().msgs.length
     const res = answer(question, data, today, fmt, memory, { ...prefs, turn })
+    // Lo que aprendió de ti queda guardado (y viaja con tu respaldo)
+    if (res.reply.learn) applyLearning(res.reply.learn)
     // Una pequeña pausa (según el largo) para que se sienta como conversación
     timer.current = window.setTimeout(() => pushBot(res.reply, res.memory), Math.min(1200, 350 + res.reply.text.length * 3))
   }
