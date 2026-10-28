@@ -162,10 +162,10 @@ type Intent =
 export const STARTER_SUGGESTIONS = [
   '¿Cómo voy este mes?',
   '¿En qué gasto más?',
-  '¿Cuánto gasté en comida?',
+  '¿Cuánto tengo comprometido el próximo mes?',
   '¿Quién me debe?',
-  '¿Cuánto pago en suscripciones?',
-  '¿Qué pagos se vienen?',
+  '¿Cómo salgo de mis deudas?',
+  '¿Qué sabes de mí?',
 ]
 
 /* ───────────── Lectura de la pregunta ───────────── */

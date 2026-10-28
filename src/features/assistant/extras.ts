@@ -443,6 +443,7 @@ export const readLearning = (q: string, question: string, data: FinanceData): Le
     )
   if (al) {
     const word = aliasKey(al[1])
+    const phrase = al[1].trim()
     const targetRaw = al[2].replace(/^(la categoria|categoria|el|la|los|las|un|una|en)\s+/, '').trim()
     // "recuerda que mi sueldo es 800 mil" no es una palabra tuya
     if (!word || word.split(' ').length > 4 || /\d/.test(targetRaw) || RESERVED.test(word)) return undefined
@@ -452,8 +453,8 @@ export const readLearning = (q: string, question: string, data: FinanceData): Le
       kind: 'effect',
       effect: { kind: 'alias', word, alias },
       text: cat
-        ? `¡Anotado! 📝 Cuando digas **${word}**, lo entiendo como **${cat.icon} ${cat.name}**. Prueba: "gasté 2 lucas en ${word}".`
-        : `¡Anotado! 📝 Cuando digas **${word}**, entiendo que es **${alias.place}**.`,
+        ? `¡Anotado! 📝 Cuando digas **${phrase}**, lo entiendo como **${cat.icon} ${cat.name}**. Prueba: "gasté 2 lucas en ${phrase}".`
+        : `¡Anotado! 📝 Cuando digas **${phrase}**, entiendo que es **${alias.place}**.`,
     }
   }
   return undefined

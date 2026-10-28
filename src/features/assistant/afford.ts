@@ -275,7 +275,9 @@ export const affordReply = (
         }`
       : ` En **${a.card.asked.n} cuotas** serían **${fmt(a.card.asked.cuota)} al mes**, y eso es mucho para lo que te sobra en un mes normal (${fmt(m.surplus)}).`
     : opts.installments && a.cupoShort
-      ? ` En cuotas tampoco: el cupo disponible de ${a.cupoShort.name} es ${fmt(a.cupoShort.available)}, menos que la compra.`
+      ? a.verdict === 'yes' || a.verdict === 'tight'
+        ? ` En cuotas no se puede: el cupo disponible de ${a.cupoShort.name} es ${fmt(a.cupoShort.available)}, menos que la compra, así que tendría que ser al contado.`
+        : ` En cuotas tampoco: el cupo disponible de ${a.cupoShort.name} es ${fmt(a.cupoShort.available)}, menos que la compra.`
       : ''
   const cupoLine =
     !opts.installments && a.cupoShort && (a.verdict === 'wait' || a.verdict === 'no')

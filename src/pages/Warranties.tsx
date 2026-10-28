@@ -84,7 +84,7 @@ export default function Warranties() {
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Button size="sm" icon={<Camera className="size-4" />} onClick={() => openSheet({ kind: 'scan' })}>
-              Escanear boleta
+              Escanear
             </Button>
             <Button size="sm" variant="secondary" onClick={() => openSheet({ kind: 'tx', type: 'expense' })}>
               Anotar compra
