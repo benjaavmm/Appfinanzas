@@ -158,6 +158,34 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     related: ['¿Cómo exporto mis movimientos a Excel?', '¿Cómo escaneo una boleta?'],
   },
   {
+    id: 'grupos',
+    kind: 'app',
+    triggers: [
+      'grupos',
+      'grupo',
+      'gastos compartidos',
+      'gastos del depto',
+      'gastos en pareja',
+      'viaje con amigos',
+      'vaca',
+      'hacer una vaca',
+      'quien le debe a quien',
+      'compartir gastos',
+    ],
+    title: 'Grupos: gastos compartidos',
+    answer:
+      'En **Grupos** anotas gastos con el depto, tu pareja, un viaje o un regalo. Cada uno pone quién pagó y entre quiénes se divide, y la app dice **quién le paga a quién** para quedar a mano, con la menor cantidad de transferencias. Los demás lo ven con un **link por WhatsApp**, sin instalar nada.',
+    steps: [
+      'Toca **Grupos** en el menú de abajo y **Nuevo**.',
+      'Ponle nombre y agrega a las personas (basta su nombre).',
+      'Toca **Invitar** para mandarles el link.',
+      'Anota cada gasto con **Gasto**: quién pagó y entre quiénes.',
+      'En **Para quedar a mano** usa **Cobrar** o **Me pagó** cuando te pasen la plata.',
+    ],
+    action: { label: 'Ir a Grupos', kind: 'nav', to: '/grupos' },
+    related: ['¿Se puede dividir una cuenta?'],
+  },
+  {
     id: 'dividir-cuenta',
     kind: 'app',
     triggers: [

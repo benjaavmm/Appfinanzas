@@ -518,5 +518,268 @@ do $$ begin
   end if;
 end $$;
 
+-- ═══════════════════════ Grupos (gastos compartidos) ═══════════════════════
+-- Un grupo (depto, viaje, pareja, regalo…) con sus integrantes: con cuenta en la app o solo con
+-- nombre (invitados, que después pueden unirse con el link). Cada gasto dice quién pagó y cuánto
+-- le toca a cada uno; los pagos entre ellos son "gastos" de tipo payment. Todo se escribe con las
+-- funciones de abajo, que validan; leer, solo los integrantes (o quien tenga el link, con group_public).
+
+create table if not exists public.groups (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 1 and 40),
+  emoji text not null default '👥' check (char_length(emoji) between 1 and 8),
+  currency text not null default 'CLP' check (currency ~ '^[A-Z]{3}$'),
+  created_by uuid not null references auth.users (id) on delete cascade,
+  invite_code text not null unique check (char_length(invite_code) between 10 and 40),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.group_members (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references public.groups (id) on delete cascade,
+  user_id uuid references auth.users (id) on delete set null,
+  name text not null check (char_length(name) between 1 and 40),
+  created_at timestamptz not null default now(),
+  unique (group_id, user_id)
+);
+create index if not exists group_members_user on public.group_members (user_id);
+
+create table if not exists public.group_entries (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references public.groups (id) on delete cascade,
+  kind text not null default 'expense' check (kind in ('expense', 'payment')),
+  description text check (char_length(description) <= 80),
+  amount numeric(14, 2) not null check (amount > 0 and amount < 1e12),
+  entry_date date not null default current_date,
+  paid_by uuid not null references public.group_members (id) on delete cascade,
+  -- { "<id del integrante>": monto } y suma lo mismo que amount
+  shares jsonb not null,
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists group_entries_group on public.group_entries (group_id, entry_date);
+
+create or replace function public.is_group_member(g uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from group_members m where m.group_id = g and m.user_id = auth.uid());
+$$;
+
+create or replace function public.group_new_code()
+returns text language sql volatile set search_path = public as $$
+  select left(replace(gen_random_uuid()::text, '-', ''), 14);
+$$;
+
+alter table public.groups enable row level security;
+alter table public.group_members enable row level security;
+alter table public.group_entries enable row level security;
+drop policy if exists groups_select on public.groups;
+create policy groups_select on public.groups for select to authenticated using (public.is_group_member(id));
+drop policy if exists group_members_select on public.group_members;
+create policy group_members_select on public.group_members for select to authenticated using (public.is_group_member(group_id));
+drop policy if exists group_entries_select on public.group_entries;
+create policy group_entries_select on public.group_entries for select to authenticated using (public.is_group_member(group_id));
+revoke all on public.groups, public.group_members, public.group_entries from anon, authenticated;
+grant select on public.groups, public.group_members, public.group_entries to authenticated;
+
+-- Mi integrante en un grupo (o error si no estoy)
+create or replace function public.group_me(g uuid)
+returns uuid language plpgsql stable security definer set search_path = public as $$
+declare m uuid;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select id into m from group_members where group_id = g and user_id = auth.uid();
+  if m is null then raise exception 'not_member'; end if;
+  return m;
+end;
+$$;
+
+-- Crear un grupo: yo + los invitados (solo nombres)
+create or replace function public.group_create(p_name text, p_emoji text, p_currency text, p_my_name text, p_guests text[])
+returns uuid language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); g uuid; n text; cnt int := 0;
+begin
+  if me is null then raise exception 'not_authenticated'; end if;
+  if (select count(*) from groups where created_by = me) >= 50 then raise exception 'too_many_groups'; end if;
+  insert into groups (name, emoji, currency, created_by, invite_code)
+  values (left(btrim(p_name), 40), coalesce(nullif(left(btrim(p_emoji), 8), ''), '👥'), coalesce(nullif(p_currency, ''), 'CLP'), me, group_new_code())
+  returning id into g;
+  insert into group_members (group_id, user_id, name) values (g, me, left(coalesce(nullif(btrim(p_my_name), ''), 'Yo'), 40));
+  foreach n in array coalesce(p_guests, '{}') loop
+    if btrim(n) <> '' and cnt < 29 then
+      insert into group_members (group_id, name) values (g, left(btrim(n), 40));
+      cnt := cnt + 1;
+    end if;
+  end loop;
+  return g;
+end;
+$$;
+
+-- Agregar a alguien (solo nombre; después puede unirse con el link y quedarse con ese lugar)
+create or replace function public.group_add_member(p_group uuid, p_name text)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare m uuid;
+begin
+  perform group_me(p_group);
+  if btrim(coalesce(p_name, '')) = '' then raise exception 'empty_name'; end if;
+  if (select count(*) from group_members where group_id = p_group) >= 30 then raise exception 'too_many_members'; end if;
+  insert into group_members (group_id, name) values (p_group, left(btrim(p_name), 40)) returning id into m;
+  update groups set updated_at = now() where id = p_group;
+  return m;
+end;
+$$;
+
+-- Quitar a alguien que no tiene gastos ni pagos (y que no se unió con su cuenta)
+create or replace function public.group_remove_member(p_member uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare g uuid; u uuid;
+begin
+  select group_id, user_id into g, u from group_members where id = p_member;
+  if g is null then raise exception 'not_found'; end if;
+  perform group_me(g);
+  if u is not null then raise exception 'is_user'; end if;
+  if exists (select 1 from group_entries e where e.group_id = g and (e.paid_by = p_member or e.shares ? p_member::text)) then
+    raise exception 'has_entries';
+  end if;
+  delete from group_members where id = p_member;
+end;
+$$;
+
+-- Nombre, emoji y link nuevo: cualquier integrante
+create or replace function public.group_update(p_group uuid, p_name text, p_emoji text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  perform group_me(p_group);
+  update groups set name = left(coalesce(nullif(btrim(p_name), ''), name), 40),
+    emoji = coalesce(nullif(left(btrim(p_emoji), 8), ''), emoji), updated_at = now()
+  where id = p_group;
+end;
+$$;
+
+create or replace function public.group_rotate_code(p_group uuid)
+returns text language plpgsql security definer set search_path = public as $$
+declare c text;
+begin
+  perform group_me(p_group);
+  update groups set invite_code = group_new_code() where id = p_group returning invite_code into c;
+  return c;
+end;
+$$;
+
+-- Salir: tu lugar queda como invitado para no perder la historia. Si no queda nadie con cuenta, se borra.
+create or replace function public.group_leave(p_group uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare m uuid := group_me(p_group);
+begin
+  update group_members set user_id = null where id = m;
+  if not exists (select 1 from group_members where group_id = p_group and user_id is not null) then
+    delete from groups where id = p_group;
+  end if;
+end;
+$$;
+
+-- Anotar un gasto o un pago. shares = { integrante: monto }, suma = amount.
+create or replace function public.group_add_entry(
+  p_group uuid, p_kind text, p_description text, p_amount numeric, p_date date, p_paid_by uuid, p_shares jsonb
+)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare e uuid; total numeric := 0; k text; v numeric; cnt int := 0;
+begin
+  perform group_me(p_group);
+  if p_kind not in ('expense', 'payment') then raise exception 'invalid_kind'; end if;
+  if p_amount is null or p_amount <= 0 or p_amount >= 1e12 then raise exception 'invalid_amount'; end if;
+  if not exists (select 1 from group_members where id = p_paid_by and group_id = p_group) then raise exception 'invalid_member'; end if;
+  if jsonb_typeof(p_shares) <> 'object' then raise exception 'invalid_shares'; end if;
+  for k, v in select key, (value #>> '{}')::numeric from jsonb_each(p_shares) loop
+    if v < 0 then raise exception 'invalid_shares'; end if;
+    if not exists (select 1 from group_members where id = k::uuid and group_id = p_group) then raise exception 'invalid_member'; end if;
+    total := total + v;
+    cnt := cnt + 1;
+  end loop;
+  if cnt = 0 or abs(total - p_amount) > 0.01 then raise exception 'shares_mismatch'; end if;
+  if p_kind = 'payment' and (cnt <> 1 or p_shares ? p_paid_by::text) then raise exception 'invalid_payment'; end if;
+  if (select count(*) from group_entries where group_id = p_group) >= 3000 then raise exception 'too_many_entries'; end if;
+  insert into group_entries (group_id, kind, description, amount, entry_date, paid_by, shares, created_by)
+  values (p_group, p_kind, nullif(left(btrim(coalesce(p_description, '')), 80), ''), p_amount,
+    coalesce(p_date, current_date), p_paid_by, p_shares, auth.uid())
+  returning id into e;
+  update groups set updated_at = now() where id = p_group;
+  return e;
+end;
+$$;
+
+-- Borrar un gasto o pago: cualquier integrante (queda a la vista de todos)
+create or replace function public.group_delete_entry(p_entry uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare g uuid;
+begin
+  select group_id into g from group_entries where id = p_entry;
+  if g is null then raise exception 'not_found'; end if;
+  perform group_me(g);
+  delete from group_entries where id = p_entry;
+  update groups set updated_at = now() where id = g;
+end;
+$$;
+
+-- Ver un grupo con el link (sin cuenta): nombres, gastos y saldos; nada de correos ni ids de usuarios
+create or replace function public.group_public(p_code text)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'group', jsonb_build_object('id', g.id, 'name', g.name, 'emoji', g.emoji, 'currency', g.currency),
+    'members', coalesce((select jsonb_agg(jsonb_build_object('id', m.id, 'name', m.name, 'joined', m.user_id is not null,
+      'me', m.user_id is not null and m.user_id = auth.uid()) order by m.created_at) from group_members m where m.group_id = g.id), '[]'),
+    'entries', coalesce((select jsonb_agg(jsonb_build_object('id', e.id, 'kind', e.kind, 'description', e.description,
+      'amount', e.amount, 'entry_date', e.entry_date, 'paid_by', e.paid_by, 'shares', e.shares, 'created_at', e.created_at)
+      order by e.entry_date desc, e.created_at desc) from group_entries e where e.group_id = g.id), '[]')
+  )
+  from groups g where g.invite_code = btrim(p_code) and char_length(btrim(p_code)) >= 10;
+$$;
+
+-- Unirse con el link: quedarse con el lugar de un invitado ("soy Jazmín") o entrar como alguien nuevo
+create or replace function public.group_join(p_code text, p_member uuid default null, p_name text default null)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); g uuid;
+begin
+  if me is null then raise exception 'not_authenticated'; end if;
+  select id into g from groups where invite_code = btrim(p_code) and char_length(btrim(p_code)) >= 10;
+  if g is null then raise exception 'invalid_code'; end if;
+  if exists (select 1 from group_members where group_id = g and user_id = me) then return g; end if;
+  if p_member is not null then
+    update group_members set user_id = me where id = p_member and group_id = g and user_id is null;
+    if found then return g; end if;
+  end if;
+  if (select count(*) from group_members where group_id = g) >= 30 then raise exception 'too_many_members'; end if;
+  insert into group_members (group_id, user_id, name)
+  values (g, me, left(coalesce(nullif(btrim(p_name), ''), (select display_name from profiles where id = me), 'Nuevo'), 40));
+  return g;
+end;
+$$;
+
+revoke all on function public.is_group_member(uuid) from public, anon;
+revoke all on function public.group_new_code() from public, anon, authenticated;
+revoke all on function public.group_me(uuid) from public, anon;
+revoke all on function public.group_create(text, text, text, text, text[]) from public, anon;
+revoke all on function public.group_add_member(uuid, text) from public, anon;
+revoke all on function public.group_remove_member(uuid) from public, anon;
+revoke all on function public.group_update(uuid, text, text) from public, anon;
+revoke all on function public.group_rotate_code(uuid) from public, anon;
+revoke all on function public.group_leave(uuid) from public, anon;
+revoke all on function public.group_add_entry(uuid, text, text, numeric, date, uuid, jsonb) from public, anon;
+revoke all on function public.group_delete_entry(uuid) from public, anon;
+revoke all on function public.group_public(text) from public;
+revoke all on function public.group_join(text, uuid, text) from public, anon;
+grant execute on function public.is_group_member(uuid) to authenticated;
+grant execute on function public.group_me(uuid) to authenticated;
+grant execute on function public.group_create(text, text, text, text, text[]) to authenticated;
+grant execute on function public.group_add_member(uuid, text) to authenticated;
+grant execute on function public.group_remove_member(uuid) to authenticated;
+grant execute on function public.group_update(uuid, text, text) to authenticated;
+grant execute on function public.group_rotate_code(uuid) to authenticated;
+grant execute on function public.group_leave(uuid) to authenticated;
+grant execute on function public.group_add_entry(uuid, text, text, numeric, date, uuid, jsonb) to authenticated;
+grant execute on function public.group_delete_entry(uuid) to authenticated;
+grant execute on function public.group_public(text) to anon, authenticated;
+grant execute on function public.group_join(text, uuid, text) to authenticated;
+
 -- Para que la API vea las funciones nuevas al tiro
 notify pgrst, 'reload schema';

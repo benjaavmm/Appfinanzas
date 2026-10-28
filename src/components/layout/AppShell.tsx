@@ -6,6 +6,7 @@ import {
   ChartPie,
   CircleUser,
   Users,
+  UsersRound,
   Ellipsis,
   HandCoins,
   House,
@@ -29,6 +30,7 @@ import { cx } from '../ui'
 export const NAV = [
   { to: '/', label: 'Inicio', icon: House },
   { to: '/movimientos', label: 'Movimientos', icon: ListFilter },
+  ...(cloudConfigured ? [{ to: '/grupos', label: 'Grupos', icon: UsersRound }] : []),
   { to: '/analisis', label: 'Análisis', icon: ChartPie },
   { to: '/asistente', label: 'Asistente', icon: Sparkles },
   { to: '/prestamos', label: 'Préstamos', icon: HandCoins },
@@ -51,12 +53,13 @@ const MOBILE = [
   { to: '/', label: 'Inicio', icon: House },
   { to: '/movimientos', label: 'Movimientos', icon: ListFilter },
   null,
-  { to: '/analisis', label: 'Análisis', icon: ChartPie },
+  cloudConfigured ? { to: '/grupos', label: 'Grupos', icon: UsersRound } : { to: '/analisis', label: 'Análisis', icon: ChartPie },
   { to: '/mas', label: 'Más', icon: Ellipsis },
 ]
 
 const MORE_ROUTES = [
   '/mas',
+  ...(cloudConfigured ? ['/analisis'] : []),
   '/asistente',
   '/prestamos',
   '/suscripciones',

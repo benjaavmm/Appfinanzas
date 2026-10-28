@@ -201,6 +201,7 @@ describe('guía de la app y conceptos', () => {
       '/',
       '/movimientos',
       '/analisis',
+      '/grupos',
       '/asistente',
       '/prestamos',
       '/suscripciones',

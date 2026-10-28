@@ -34,6 +34,10 @@ import Account from './pages/Account'
 import Friends from './pages/Friends'
 import Assistant from './pages/Assistant'
 import BankAuto from './pages/BankAuto'
+import Groups from './pages/Groups'
+import GroupDetail from './pages/GroupDetail'
+import GroupJoin from './pages/GroupJoin'
+import { startGroups } from './lib/cloud/groups'
 import { startInbox } from './lib/cloud/inbox'
 import { startPush } from './lib/cloud/push'
 
@@ -104,6 +108,9 @@ const AppRoutes = () => {
       <Route path="/amigos" element={<Friends />} />
       <Route path="/asistente" element={<Assistant />} />
       <Route path="/automatico" element={<BankAuto />} />
+      <Route path="/grupos" element={<Groups />} />
+      <Route path="/grupos/:id" element={<GroupDetail />} />
+      <Route path="/unirse/:code" element={<GroupJoin />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
@@ -249,6 +256,13 @@ export default function App() {
   const onboarded = useStore((s) => s.settings.onboarded)
   const pinHash = useStore((s) => s.settings.pinHash)
   const [unlocked, setUnlocked] = useState(wasRecentlyActive)
+  // Link de un grupo: se ve aunque la persona nunca haya abierto la app
+  const [joinLink, setJoinLink] = useState(() => window.location.hash.startsWith('#/unirse/'))
+  useEffect(() => {
+    const onHash = () => setJoinLink(window.location.hash.startsWith('#/unirse/'))
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
   const hiddenAt = useRef<number | null>(null)
 
   // Sin PIN la app está abierta; si se pone un PIN después, no se bloquea en ese momento
@@ -277,6 +291,7 @@ export default function App() {
     startSync()
     startSocial()
     startInbox()
+    startGroups()
     startPush()
     void initAuth()
     if (checkUpdated()) toast({ message: '✨ Listo, ya tienes la versión nueva de Mis Finanzas' })
@@ -316,7 +331,18 @@ export default function App() {
   let content
   if (!hydrated) content = <Splash />
   else if (pinHash && !unlocked) content = <LockScreen onUnlock={() => setUnlocked(true)} />
-  else if (!onboarded) content = <Onboarding />
+  else if (!onboarded)
+    content = joinLink ? (
+      <HashRouter>
+        <div className="mx-auto max-w-lg px-4">
+          <Routes>
+            <Route path="/unirse/:code" element={<GroupJoin standalone />} />
+          </Routes>
+        </div>
+      </HashRouter>
+    ) : (
+      <Onboarding />
+    )
   else
     content = (
       <HashRouter>
