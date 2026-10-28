@@ -68,7 +68,19 @@ export default function Insights() {
 
   return (
     <div>
-      <PageHeader title="Análisis" subtitle="Lo que tus números dicen de ti">
+      <PageHeader
+        title="Análisis"
+        subtitle="Lo que tus números dicen de ti"
+        actions={
+          <button
+            type="button"
+            onClick={() => nav('/resumen')}
+            className="rounded-full bg-brand-soft px-3 py-1.5 text-xs font-bold text-brand"
+          >
+            ✨ Tu mes en lucas
+          </button>
+        }
+      >
         <MonthSwitcher
           month={month}
           onChange={(d) => {

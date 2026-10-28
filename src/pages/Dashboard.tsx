@@ -40,6 +40,7 @@ import { TxItem } from '../components/TxItem'
 import { QuickAddBar } from '../features/quick/QuickAddBar'
 import { GroupsDashCard } from '../features/groups/GroupsDashCard'
 import { FutureCard } from '../features/future/FutureCard'
+import { WrappedDashCard } from '../features/wrapped/WrappedDashCard'
 import { AnimatedMoney, Card, cx, DeltaPill, EmptyState, IconButton, ProgressBar, Ring, SectionHeader } from '../components/ui'
 
 const greeting = () => {
@@ -232,6 +233,7 @@ export default function Dashboard() {
             ))}
           </div>
 
+          <WrappedDashCard />
           <GroupsDashCard />
 
           {/* Cuentas */}

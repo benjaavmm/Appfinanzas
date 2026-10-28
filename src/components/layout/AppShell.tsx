@@ -19,6 +19,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Gift,
   Tags,
   Target,
 } from 'lucide-react'
@@ -35,6 +36,7 @@ export const NAV = [
   ...(cloudConfigured ? [{ to: '/grupos', label: 'Grupos', icon: UsersRound }] : []),
   { to: '/analisis', label: 'Análisis', icon: ChartPie },
   { to: '/asistente', label: 'Asistente', icon: Sparkles },
+  { to: '/resumen', label: 'Tu mes en lucas', icon: Gift },
   { to: '/prestamos', label: 'Préstamos', icon: HandCoins },
   { to: '/deudas', label: 'Salir de deudas', icon: Compass },
   { to: '/suscripciones', label: 'Suscripciones', icon: Repeat },
@@ -65,6 +67,7 @@ const MORE_ROUTES = [
   '/mas',
   ...(cloudConfigured ? ['/analisis'] : []),
   '/asistente',
+  '/resumen',
   '/prestamos',
   '/deudas',
   '/suscripciones',

@@ -20,6 +20,7 @@ export default function More() {
     // Con grupos, Análisis pasa a Más (el menú de abajo muestra Grupos)
     ...(cloudConfigured ? { '/analisis': 'En qué se va tu plata, mes a mes' } : {}),
     '/asistente': 'Pregúntale a tus finanzas',
+    '/resumen': 'Tu resumen para compartir ✨',
     '/prestamos': owedToMe > 0 ? `Te deben ${fmt(owedToMe)}` : 'Quién te debe',
     '/deudas': 'Tu plan para quedar libre',
     '/garantias': activeWarranties ? `${activeWarranties} vigentes` : 'Boletas y avisos antes de que venzan',
@@ -36,6 +37,7 @@ export default function More() {
   const colors: Record<string, string> = {
     '/analisis': '#6655f5',
     '/asistente': '#c2508f',
+    '/resumen': '#c2508f',
     '/prestamos': '#1baf7a',
     '/deudas': '#e34948',
     '/garantias': '#1baf7a',
