@@ -16,6 +16,7 @@ import {
   PiggyBank,
   Repeat,
   Send,
+  ShieldCheck,
   Smartphone,
 } from 'lucide-react'
 import { useData, useToday, vibrate } from '../../lib/hooks'
@@ -93,6 +94,7 @@ const KIND_ICON: Record<Reminder['kind'], { icon: ReactNode; cls: string }> = {
   loan: { icon: <HandCoins className="size-4" />, cls: 'bg-warn-soft text-warn' },
   budget: { icon: <PiggyBank className="size-4" />, cls: 'bg-bad-soft text-bad' },
   card: { icon: <CreditCard className="size-4" />, cls: 'bg-info-soft text-info' },
+  warranty: { icon: <ShieldCheck className="size-4" />, cls: 'bg-good-soft text-good' },
   daily: { icon: <NotebookPen className="size-4" />, cls: 'bg-good-soft text-good' },
   weekly: { icon: <CalendarDays className="size-4" />, cls: 'bg-brand-soft text-brand' },
   month: { icon: <ChartColumn className="size-4" />, cls: 'bg-good-soft text-good' },
@@ -293,6 +295,9 @@ export const RemindersCard = () => {
               </Row>
               <Row title="Presupuestos" text="Al llegar al 80 % y al 100 % del mes">
                 <Toggle checked={prefs.budgets} onChange={(v) => save({ budgets: v })} label="Avisar presupuestos" />
+              </Row>
+              <Row title="Garantías" text="2 semanas antes de que venzan">
+                <Toggle checked={prefs.warranties !== false} onChange={(v) => save({ warranties: v })} label="Avisar garantías" />
               </Row>
             </div>
             <Field label="Avisar los cobros" className="mt-2">

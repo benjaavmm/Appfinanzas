@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useMemo, useState } from 'react'
 import { ArrowDown, Camera, Sparkles, Trash } from 'lucide-react'
-import { addDaysStr, todayStr } from '../../lib/dates'
+import { addDaysStr, fmtDate, todayStr } from '../../lib/dates'
 import { COLORS } from '../../lib/defaults'
 import { installmentAmounts } from '../../lib/credit'
 import { byCategory, inMonth } from '../../lib/finance'
@@ -16,6 +16,7 @@ import { Button, Chip, cx, Field, Input, Segmented, Textarea } from '../ui'
 import { AccountChips, AmountInput, CategoryGrid, EmojiPicker } from '../ui/pickers'
 import { Sheet } from '../ui/Sheet'
 import { ReceiptAttachment } from '../../features/receipts/ReceiptAttachment'
+import { WARRANTY_OPTIONS, warrantyEnd } from '../../lib/warranty'
 
 type Props = { open: boolean; onClose: () => void; state: Extract<SheetState, { kind: 'tx' }> }
 
@@ -39,6 +40,7 @@ export const TransactionForm = ({ open, onClose, state }: Props) => {
   const [place, setPlace] = useState(init.place ?? '')
   const [note, setNote] = useState(init.note ?? '')
   const [installments, setInstallments] = useState(init.installments && init.installments > 1 ? init.installments : 1)
+  const [warrantyMonths, setWarrantyMonths] = useState(init.warrantyMonths ?? 0)
   const [placeFocus, setPlaceFocus] = useState(false)
   const [touchedCategory, setTouchedCategory] = useState(!!init.categoryId)
   const [learned, setLearned] = useState<string | null>(null)
@@ -100,6 +102,7 @@ export const TransactionForm = ({ open, onClose, state }: Props) => {
       subscriptionId: existing?.subscriptionId,
       receiptId,
       installments: isCreditPurchase && installments > 1 ? installments : undefined,
+      warrantyMonths: type === 'expense' && warrantyMonths > 0 ? warrantyMonths : undefined,
     }
     vibrate(12)
     if (existing) {
@@ -420,6 +423,26 @@ export const TransactionForm = ({ open, onClose, state }: Props) => {
           </Field>
 
           <ReceiptAttachment receiptId={receiptId} onChange={setReceiptId} canAttach={type === 'expense'} />
+
+          {type === 'expense' && (
+            <Field
+              label="Garantía"
+              hint={
+                warrantyMonths > 0
+                  ? `Te aviso antes de que venza (${fmtDate(warrantyEnd({ date, warrantyMonths })!, "d 'de' MMMM yyyy")}). Guarda la boleta aquí arriba.`
+                  : 'Para cosas que pueden fallar: en Chile todo producto nuevo tiene 6 meses de garantía legal.'
+              }
+            >
+              <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5">
+                {WARRANTY_OPTIONS.map((o) => (
+                  <Chip key={o.months} active={warrantyMonths === o.months} onClick={() => setWarrantyMonths(o.months)}>
+                    {o.months ? '🛡️ ' : ''}
+                    {o.label}
+                  </Chip>
+                ))}
+              </div>
+            </Field>
+          )}
 
           {existing?.subscriptionId && (
             <p className={cx('rounded-2xl bg-info-soft px-4 py-3 text-xs font-medium text-info')}>

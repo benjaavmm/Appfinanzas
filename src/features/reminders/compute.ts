@@ -13,11 +13,12 @@ import { currencyDecimals, formatMoney, plural } from '../../lib/format'
 import { upcomingCharges } from '../../lib/recurring'
 import type { DateStr, FinanceData, Loan, ReminderSettings, Subscription, Transaction } from '../../lib/types'
 import { nudgeText, type NudgeMoment } from './nudges'
+import { warrantyEnd } from '../../lib/warranty'
 
 export interface Reminder {
   /** Estable por ocurrencia (p. ej. `sub:<id>:<fecha>`), para no avisar dos veces lo mismo */
   id: string
-  kind: 'subscription' | 'loan' | 'budget' | 'card' | 'daily' | 'weekly' | 'month'
+  kind: 'subscription' | 'loan' | 'budget' | 'card' | 'warranty' | 'daily' | 'weekly' | 'month'
   title: string
   body: string
   /** Ruta de la app a abrir al tocar la notificación, p. ej. "#/suscripciones" */
@@ -135,6 +136,7 @@ export const computeReminders = (data: FinanceData, today: DateStr, now?: Date):
   if (prefs.loans) out.push(...loanReminders(data.loans ?? [], today, money))
   if (prefs.budgets) out.push(...budgetReminders(data, today, money))
   if (prefs.cards !== false) out.push(...cardReminders(data, today, prefs.daysBefore, money))
+  if (prefs.warranties !== false) out.push(...warrantyReminders(data, today))
   if (now) out.push(...timedReminders(data, today, now, prefs, hideAmounts, money))
 
   return out
@@ -244,6 +246,38 @@ const subscriptionReminders = (
           ? `Pago pendiente: ${sub.name} · ${money(sub.amount)}`
           : `Pago pendiente: ${sub.name} · ${dates.length} cobros (${money(total)})`,
       body: `Venció ${agoText(late)}. Si ya lo pagaste, márcalo en Suscripciones.`,
+    })
+  }
+  return out
+}
+
+/* ───────────────────────── Garantías ───────────────────────── */
+
+const WARRANTY_URL = '#/garantias'
+
+/** 2 semanas antes, 2 días antes y el último día de la garantía */
+const warrantyReminders = (data: FinanceData, today: DateStr): Candidate[] => {
+  const out: Candidate[] = []
+  for (const t of data.transactions) {
+    if (t.type !== 'expense' || !t.warrantyMonths) continue
+    const end = warrantyEnd(t)
+    if (!end) continue
+    const left = daysBetween(today, end)
+    const stage = left === 0 ? 0 : left >= 1 && left <= 2 ? 2 : left >= 13 && left <= 14 ? 14 : -1
+    if (stage < 0) continue
+    const what = t.place?.trim() || t.note?.trim() || 'tu compra'
+    out.push({
+      id: `warranty:${t.id}:${stage}`,
+      kind: 'warranty',
+      url: WARRANTY_URL,
+      rank: stage === 0 ? 0 : 3,
+      days: left,
+      weight: t.amount,
+      title:
+        left === 0
+          ? `🛡️ Hoy vence la garantía de ${what}`
+          : `🛡️ La garantía de ${what} vence ${left === 1 ? 'mañana' : `en ${left} días`}`,
+      body: 'Si algo falla, todavía puedes pedir cambio, reparación o devolución. Tienes la boleta en la app.',
     })
   }
   return out

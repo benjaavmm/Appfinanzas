@@ -1,7 +1,8 @@
 import { Link } from 'react-router'
 import { ChevronRight } from 'lucide-react'
 import { debtTotals, goalsSavedTotal } from '../lib/finance'
-import { useData, useMoney } from '../lib/hooks'
+import { warranties } from '../lib/warranty'
+import { useData, useMoney, useToday } from '../lib/hooks'
 import { monthlyEquivalent } from '../lib/recurring'
 import { NAV } from '../components/layout/AppShell'
 import { PageHeader } from '../components/ui'
@@ -9,7 +10,9 @@ import { useAuth } from '../lib/cloud/auth'
 import { cloudConfigured } from '../lib/cloud/client'
 
 export default function More() {
-  const { loans, subscriptions, goals, accounts, categories } = useData()
+  const { loans, subscriptions, goals, accounts, categories, transactions } = useData()
+  const today = useToday()
+  const activeWarranties = warranties(transactions, today).active.length
   const fmt = useMoney()
   const auth = useAuth()
   const { owedToMe } = debtTotals(loans)
@@ -19,6 +22,7 @@ export default function More() {
     '/asistente': 'Pregúntale a tus finanzas',
     '/prestamos': owedToMe > 0 ? `Te deben ${fmt(owedToMe)}` : 'Quién te debe',
     '/deudas': 'Tu plan para quedar libre',
+    '/garantias': activeWarranties ? `${activeWarranties} vigentes` : 'Boletas y avisos antes de que venzan',
     '/suscripciones': `${fmt(subscriptions.filter((s) => s.active).reduce((s, x) => s + monthlyEquivalent(x), 0))} al mes`,
     '/presupuestos': `${categories.filter((c) => c.budget).length} activos`,
     '/metas': goals.length ? `${fmt(goalsSavedTotal(goals))} apartados` : 'Ahorra con objetivos',
@@ -34,6 +38,7 @@ export default function More() {
     '/asistente': '#c2508f',
     '/prestamos': '#1baf7a',
     '/deudas': '#e34948',
+    '/garantias': '#1baf7a',
     '/suscripciones': '#3987e5',
     '/presupuestos': '#eb6834',
     '/metas': '#e87ba4',
