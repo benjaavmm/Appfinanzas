@@ -153,7 +153,9 @@ describe('conversación y personalidad', () => {
     expect(ask('gracias!').reply.kind).toBe('smalltalk:thanks')
     expect(ask('cuéntame un chiste').reply.kind).toBe('smalltalk:joke')
     expect(ask('¿eres una IA?').reply.kind).toBe('smalltalk:areYouAI')
-    expect(ask('estoy sin plata').reply.kind).toBe('smalltalk:sad')
+    expect(ask('estoy preocupado por mis deudas').reply.kind).toBe('smalltalk:sad')
+    // "Estoy sin plata" responde con tus números (empezando con buena onda)
+    expect(ask('estoy sin plata').reply.kind).toBe('shortOnMoney')
   })
   it('cada personalidad habla distinto', () => {
     const greets = (['amigo', 'profesional', 'coach', 'chistoso'] as const).map(
@@ -205,6 +207,7 @@ describe('guía de la app y conceptos', () => {
       '/deudas',
       '/garantias',
       '/resumen',
+      '/automatico',
       '/asistente',
       '/prestamos',
       '/suscripciones',

@@ -60,7 +60,7 @@ const allText = (r: Reply) =>
   ].join('\n')
 
 const ROUTES =
-  /^\/(|movimientos|analisis|grupos(\/[\w-]+)?|deudas|garantias|resumen|asistente|prestamos|suscripciones|presupuestos|metas|cuentas|categorias|ajustes|mas|cuenta|amigos|banco)$/
+  /^\/(|movimientos|analisis|grupos(\/[\w-]+)?|deudas|garantias|resumen|asistente|prestamos|suscripciones|presupuestos|metas|cuentas|categorias|ajustes|mas|cuenta|amigos|automatico)$/
 
 describe('el asistente responde todo con sentido', () => {
   const cases: [string, string | RegExp][] = [

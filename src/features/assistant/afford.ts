@@ -204,6 +204,9 @@ export const affordReply = (
   const a = analyzePurchase(data, today, amount, opts)
   // "unas zapatillas", "un celular"; "esto"/"eso" no aporta
   const item = /^(esto|eso|esa|ese|algo|aquello)$/.test(what.trim()) ? '' : what.trim()
+  // "viajar a Brasil", "ir a un concierto", "pagar el arriendo": se hace, no se compra
+  const doing = /^(ir|irme|viajar|salir|arrendar|pagar|tomar|hacer|invitar|darme|comer|celebrar|cambiarme|estudiar)\b/.test(item)
+  const youCan = doing ? `puedes ${item}` : `puedes comprarte ${item}`
   const m = a.monthly
   const best = a.card?.asked ?? a.card?.options.find((o) => o.fits) ?? a.card?.options[0]
   const rate = a.card?.rate
@@ -258,7 +261,7 @@ export const affordReply = (
   const daily = m.expense > 0 ? m.expense / 30.44 : 0
   if (a.verdict === 'yes' && !opts.installments && daily > 0 && amount <= daily) {
     return {
-      text: `**Sí, tranqui${item ? `, cómprate ${item}` : ''}.** Es menos de lo que gastas en un día normal (${fmt(Math.round(daily))}) y a fin de mes igual te quedarían unos ${fmt(a.afterCash)}.`,
+      text: `**Sí, tranqui${item ? `, ${doing ? youCan : `cómprate ${item}`}` : ''}.** Es menos de lo que gastas en un día normal (${fmt(Math.round(daily))}) y a fin de mes igual te quedarían unos ${fmt(a.afterCash)}.`,
       why: `Lo comparo con tu gasto diario normal (${fmt(m.expense)} al mes ÷ 30) y reviso que a fin de mes te quede plata después de tus pagos: ${fmt(a.afterCash)}.`,
       react: 'affordYes',
       kind: 'afford',
@@ -288,14 +291,16 @@ export const affordReply = (
   let advice = ''
   switch (a.verdict) {
     case 'yes':
-      head = item ? `**Sí, puedes comprarte ${item}.**` : '**Sí, te alcanza.**'
+      head = item ? `**Sí, ${youCan}.**` : '**Sí, te alcanza.**'
       advice =
         a.goal && amount > Math.max(0, m.surplus)
           ? ` Solo considera que es más de lo que te sobra en un mes, y estás juntando para ${a.goal.icon} ${a.goal.name}.`
           : ' Te queda colchón para imprevistos.'
       break
     case 'tight':
-      head = item ? `**Puedes comprarte ${item}, pero quedas muy justo.**` : '**Te alcanza, pero quedas muy justo.**'
+      head = item
+        ? `**${youCan.charAt(0).toUpperCase()}${youCan.slice(1)}, pero quedas muy justo.**`
+        : '**Te alcanza, pero quedas muy justo.**'
       advice = ` Te quedarían menos de ${fmt(a.buffer)} para imprevistos.${
         best && best.fits ? ` Si es sin interés, en **${best.n} cuotas** (${fmt(best.cuota)} al mes) te afecta mucho menos.` : ''
       }${a.incomeLeft ? ' O espera a que te llegue el sueldo.' : ''}`
