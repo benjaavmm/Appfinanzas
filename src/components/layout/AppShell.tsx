@@ -4,6 +4,7 @@ import { NavLink, useLocation } from 'react-router'
 import {
   BellRing,
   ChartPie,
+  Compass,
   CircleUser,
   Users,
   UsersRound,
@@ -34,6 +35,7 @@ export const NAV = [
   { to: '/analisis', label: 'Análisis', icon: ChartPie },
   { to: '/asistente', label: 'Asistente', icon: Sparkles },
   { to: '/prestamos', label: 'Préstamos', icon: HandCoins },
+  { to: '/deudas', label: 'Salir de deudas', icon: Compass },
   { to: '/suscripciones', label: 'Suscripciones', icon: Repeat },
   { to: '/presupuestos', label: 'Presupuestos', icon: Target },
   { to: '/metas', label: 'Metas de ahorro', icon: PiggyBank },
@@ -62,6 +64,7 @@ const MORE_ROUTES = [
   ...(cloudConfigured ? ['/analisis'] : []),
   '/asistente',
   '/prestamos',
+  '/deudas',
   '/suscripciones',
   '/presupuestos',
   '/metas',

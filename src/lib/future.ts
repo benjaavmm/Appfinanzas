@@ -67,6 +67,16 @@ export const usualIncome = (data: Pick<FinanceData, 'transactions'>, today: Date
   return months.length ? Math.round(months.reduce((s, t) => s + sumType(t, 'income'), 0) / months.length) : 0
 }
 
+/** Gasto de un mes normal (mismo criterio que el ingreso) */
+export const usualExpense = (data: Pick<FinanceData, 'transactions'>, today: DateStr): number => {
+  const ref = parseDate(today)
+  const months = [1, 2, 3]
+    .map((n) => shiftMonth(ref, -n))
+    .map((m) => inRange(data.transactions, monthStart(m), monthEnd(m)))
+    .filter((txs) => txs.length > 0)
+  return months.length ? Math.round(months.reduce((s, t) => s + sumType(t, 'expense'), 0) / months.length) : 0
+}
+
 export const futureCommitments = (data: FinanceData, today: DateStr, count = 6, decimals = 0): FutureCommitments => {
   const ref = parseDate(today)
   const keys = Array.from({ length: count }, (_, i) => shiftMonth(ref, i))

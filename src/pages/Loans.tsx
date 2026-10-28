@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import { useMemo, useState } from 'react'
 import { Plus, Split } from 'lucide-react'
 import { fmtDate, fmtInDays } from '../lib/dates'
@@ -117,6 +118,15 @@ export default function Loans() {
           </button>
         </div>
       </div>
+      {iOwe > 0 && (
+        <Link
+          to="/deudas"
+          className="mt-3 flex items-center justify-between rounded-2xl border border-line bg-surface px-4 py-3 text-sm font-semibold shadow-card"
+        >
+          <span>🧭 Arma tu plan para salir de deudas</span>
+          <span className="text-brand">→</span>
+        </Link>
+      )}
 
       {loans.length === 0 ? (
         <EmptyState

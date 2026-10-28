@@ -37,6 +37,7 @@ import BankAuto from './pages/BankAuto'
 import Groups from './pages/Groups'
 import GroupDetail from './pages/GroupDetail'
 import GroupJoin from './pages/GroupJoin'
+import DebtPlan from './pages/DebtPlan'
 import { startGroups } from './lib/cloud/groups'
 import { startInbox } from './lib/cloud/inbox'
 import { startPush } from './lib/cloud/push'
@@ -109,6 +110,7 @@ const AppRoutes = () => {
       <Route path="/asistente" element={<Assistant />} />
       <Route path="/automatico" element={<BankAuto />} />
       <Route path="/grupos" element={<Groups />} />
+      <Route path="/deudas" element={<DebtPlan />} />
       <Route path="/grupos/:id" element={<GroupDetail />} />
       <Route path="/unirse/:code" element={<GroupJoin />} />
       <Route path="*" element={<Navigate to="/" replace />} />
