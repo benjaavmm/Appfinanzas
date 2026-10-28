@@ -9,6 +9,7 @@ import { accountBalances, goalMonthlyNeeded, goalSaved, inRange, loanRemaining, 
 import { monthStats } from '../../lib/insights'
 import { upcomingCharges } from '../../lib/recurring'
 import { cardSummary } from '../../lib/credit'
+import { futureCommitments, installmentWithInterest, withNewCuota } from '../../lib/future'
 import type { Account, DateStr, FinanceData } from '../../lib/types'
 import type { Fmt, Reply, ReplyRow } from './types'
 
@@ -17,6 +18,9 @@ export type AffordVerdict = 'yes' | 'tight' | 'credit' | 'wait' | 'no'
 export interface CreditOption {
   n: number
   cuota: number
+  /** Lo que pagarías en total y cuánto es interés (con la tasa de la tarjeta, si la sabemos) */
+  total: number
+  interest: number
   /** La cuota cabe en lo que te sobra al mes (usa como máximo la mitad) */
   fits: boolean
 }
@@ -40,7 +44,9 @@ export interface PurchaseAnalysis {
   monthly: { income: number; expense: number; surplus: number; months: number }
   /** Cuotas que ya pagas al mes en tus tarjetas */
   installments: number
-  card?: { account: Account; available?: number; options: CreditOption[]; asked?: CreditOption }
+  card?: { account: Account; available?: number; options: CreditOption[]; asked?: CreditOption; rate?: number }
+  /** Cómo queda tu mes más cargado de los próximos si sumas la cuota */
+  future?: { label: string; before: number; after: number; share?: number }
   /** Hay tarjeta, pero el cupo disponible no alcanza para la compra */
   cupoShort?: { name: string; available: number }
   waitMonths?: number
@@ -100,7 +106,8 @@ export const analyzePurchase = (
     const big = txs.filter((t) => t.type === 'income').sort((a, b) => b.amount - a.amount)[0]
     return big ? [parseDate(big.date).getDate()] : []
   })
-  const incomeDay = payDays.length ? median(payDays) : undefined
+  // Si me contaste qué día te pagan, manda eso
+  const incomeDay = data.settings.assistant?.payday ?? (payDays.length ? median(payDays) : undefined)
   const incomeLeft =
     incomeDay && st.income < avgIncome * 0.5 && st.dayOfMonth < incomeDay ? Math.max(0, Math.round(avgIncome - st.income)) : 0
 
@@ -114,9 +121,10 @@ export const analyzePurchase = (
 
   // Opción a crédito
   const best = summaries.sort((a, b) => (b.s.available ?? 0) - (a.s.available ?? 0))[0]
+  const rate = best?.c.interestRate
   const option = (n: number): CreditOption => {
-    const cuota = Math.ceil(amount / n)
-    return { n, cuota, fits: surplus > 0 && cuota <= surplus * 0.5 }
+    const { cuota, total, interest } = installmentWithInterest(amount, n, rate ?? 0)
+    return { n, cuota, total, interest, fits: surplus > 0 && cuota <= surplus * 0.5 }
   }
   const creditOk = !!best && (best.s.available === undefined || best.s.available >= amount)
   const cardInfo = best
@@ -125,6 +133,7 @@ export const analyzePurchase = (
         available: best.s.available,
         options: [3, 6, 12].map(option),
         asked: opts.installments && opts.installments > 1 ? option(opts.installments) : undefined,
+        rate,
       }
     : undefined
 
@@ -147,9 +156,17 @@ export const analyzePurchase = (
   // Si pidió cuotas que no le caben, no se las recomendamos
   if (verdict === 'credit' && cardInfo?.asked && !cardInfo.asked.fits) verdict = waitMonths && waitMonths <= 12 ? 'wait' : 'no'
 
+  // Tu yo del futuro: el mes más cargado de los que pagarías la cuota
+  const chosen = cardInfo?.asked ?? cardInfo?.options.find((o) => o.fits)
+  const impact = chosen ? withNewCuota(futureCommitments(data, today, 7), chosen.cuota, chosen.n) : undefined
+  const future = impact
+    ? { label: impact.month.label, before: impact.before, after: impact.after, share: impact.shareAfter }
+    : undefined
+
   return {
     amount,
     liquid,
+    future,
     committed,
     variableLeft,
     daysLeft,
@@ -189,6 +206,17 @@ export const affordReply = (
   const item = /^(esto|eso|esa|ese|algo|aquello)$/.test(what.trim()) ? '' : what.trim()
   const m = a.monthly
   const best = a.card?.asked ?? a.card?.options.find((o) => o.fits) ?? a.card?.options[0]
+  const rate = a.card?.rate
+  // El costo real de las cuotas: con la tasa de la tarjeta, o el aviso de que falta saberla
+  const interestText = (o: CreditOption) =>
+    rate && rate > 0
+      ? ` Con la tasa de tu tarjeta (${String(rate).replace('.', ',')}% mensual) pagarías **${fmt(o.total)}** en total: **${fmt(o.interest)} más** que al contado.`
+      : ' Eso si son **sin interés**; si tu tarjeta cobra interés, pon su tasa en **Cuentas** y te digo cuánto pagarías de más.'
+  const futureText = a.future
+    ? ` Y piensa en tu yo del futuro: ${a.future.label.toLowerCase()} ya tiene ${fmt(a.future.before)} comprometidos; con esta cuota serían **${fmt(a.future.after)}**${
+        a.future.share !== undefined ? ` (${Math.round(a.future.share * 100)}% de lo que te entra)` : ''
+      }.`
+    : ''
 
   // Cómo llega a fin de mes (la parte que se repite en todas las respuestas)
   const flow = [
@@ -240,7 +268,7 @@ export const affordReply = (
 
   const askedLine = a.card?.asked
     ? a.card.asked.fits
-      ? ` En **${a.card.asked.n} cuotas** serían **${fmt(a.card.asked.cuota)} al mes**: te caben (en un mes normal te sobran ${fmt(m.surplus)}).${
+      ? ` En **${a.card.asked.n} cuotas** serían **${fmt(a.card.asked.cuota)} al mes**: te caben (en un mes normal te sobran ${fmt(m.surplus)}).${interestText(a.card.asked)}${futureText}${
           a.verdict === 'yes'
             ? ' Pero si lo puedes pagar al contado sin problema, es mejor: no sumas otra cuota a las que ya tienes.'
             : ''
@@ -274,7 +302,7 @@ export const affordReply = (
       head = `**Al contado no te conviene, pero en ${best!.n} cuotas sí.**`
       advice = ` Serían **${fmt(best!.cuota)} al mes** y en un mes normal te sobran ${fmt(m.surplus)}, así que cabe sin ahogarte${
         a.card?.available !== undefined ? ` (tienes ${fmt(a.card.available)} de cupo en ${a.card.account.name})` : ''
-      }. Solo si son **sin interés**: con interés sale bastante más caro.`
+      }.${a.card?.asked ? '' : `${interestText(best!)}${futureText}`}`
       break
     case 'wait':
       head = `**Ahora no te conviene.**`
@@ -337,6 +365,19 @@ export const affordReply = (
             value: `${fmt(best.cuota)}/mes`,
             tone: best.fits ? ('good' as const) : ('bad' as const),
           },
+          ...(best.interest > 0
+            ? [{ icon: '💸', label: 'Interés que pagarías', value: fmt(best.interest), tone: 'bad' as const }]
+            : []),
+        ]
+      : []),
+    ...(a.future && (a.verdict === 'credit' || a.card?.asked)
+      ? [
+          {
+            icon: '🔮',
+            label: `${a.future.label} con la cuota`,
+            value: fmt(a.future.after),
+            tone: (a.future.share ?? 0) >= 0.5 ? ('bad' as const) : ('muted' as const),
+          },
         ]
       : []),
   ]
@@ -354,6 +395,12 @@ export const affordReply = (
       ? `Para las cuotas miro tu mes normal (promedio de ${m.months} ${m.months === 1 ? 'mes' : 'meses'}): te sobran ${fmt(m.surplus)}, y una cuota debería usar como máximo la mitad.`
       : '',
     a.goal?.monthlyNeeded ? `Tu meta ${a.goal.name} necesita ${fmt(a.goal.monthlyNeeded)} al mes para llegar a tiempo.` : '',
+    rate && best
+      ? `Las cuotas con interés las calculo como la tarjeta: cuota fija con ${String(rate).replace('.', ',')}% mensual durante ${best.n} meses.`
+      : '',
+    a.future
+      ? `Para tu yo del futuro sumo lo que ya tienes comprometido cada mes (cuotas, tarjeta, cobros fijos y deudas) y le agrego la cuota nueva.`
+      : '',
   ]
     .filter(Boolean)
     .join(' ')

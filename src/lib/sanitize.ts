@@ -7,6 +7,7 @@ import { DEFAULT_SETTINGS } from './defaults'
 import type {
   Account,
   AccountType,
+  AssistantAlias,
   Category,
   FinanceData,
   Frequency,
@@ -74,6 +75,21 @@ export const sanitizeData = (r: Record<string, unknown>, version: number): Sanit
     return out
   }
   const now = () => new Date().toISOString()
+  /** Tasa de interés mensual en %: entre 0 y 30, con dos decimales */
+  const rate = (v: unknown): number | undefined => {
+    const n = num(v)
+    return n === undefined || n < 0 || n > 30 ? undefined : Math.round(n * 100) / 100
+  }
+  const aliases = (v: unknown): Record<string, AssistantAlias> | undefined => {
+    if (!isObj(v)) return undefined
+    const out: Record<string, AssistantAlias> = {}
+    for (const [k, x] of Object.entries(v).slice(0, 200)) {
+      if (!isObj(x) || k.length > 40) continue
+      const a = clean({ categoryId: str(x.categoryId), place: str(x.place)?.slice(0, 60) }) as AssistantAlias
+      if (a.categoryId || a.place) out[k] = a
+    }
+    return Object.keys(out).length ? out : undefined
+  }
 
   const account = (v: unknown): Account | undefined => {
     if (!isObj(v)) return
@@ -91,6 +107,7 @@ export const sanitizeData = (r: Record<string, unknown>, version: number): Sanit
       creditLimit: num(v.creditLimit),
       statementDay: intIn(v.statementDay, 1, 31),
       paymentDay: intIn(v.paymentDay, 1, 31),
+      interestRate: rate(v.interestRate),
       createdAt: str(v.createdAt) ?? now(),
     })
   }
@@ -133,6 +150,7 @@ export const sanitizeData = (r: Record<string, unknown>, version: number): Sanit
       installments: intIn(v.installments, 1, 120),
       receiptId: str(v.receiptId),
       splitId: str(v.splitId),
+      warrantyMonths: intIn(v.warrantyMonths, 1, 120),
       createdAt: str(v.createdAt) ?? now(),
     })
   }
@@ -180,6 +198,7 @@ export const sanitizeData = (r: Record<string, unknown>, version: number): Sanit
       // Los pagos dañados de un préstamo no cuentan como "registro descartado" aparte
       payments: Array.isArray(v.payments) ? v.payments.map(payment).filter((p): p is LoanPayment => !!p) : [],
       splitId: str(v.splitId),
+      interestRate: rate(v.interestRate),
       shared: shared(v.shared),
       createdAt: str(v.createdAt) ?? now(),
     })
@@ -269,12 +288,20 @@ export const sanitizeData = (r: Record<string, unknown>, version: number): Sanit
             daily: bool(rem.daily),
             dailyHour: intIn(rem.dailyHour, 0, 23),
             weekly: bool(rem.weekly),
+            warranties: bool(rem.warranties),
           })
         : undefined,
       merchantNames: names
         ? Object.fromEntries(Object.entries(names).filter((e): e is [string, string] => typeof e[1] === 'string'))
         : undefined,
-      assistant: ai ? clean({ name: str(ai.name), personality: str(ai.personality) }) : undefined,
+      assistant: ai
+        ? clean({
+            name: str(ai.name),
+            personality: str(ai.personality),
+            aliases: aliases(ai.aliases),
+            payday: intIn(ai.payday, 1, 31),
+          })
+        : undefined,
       bankLinks: links
         ? Object.fromEntries(
             Object.entries(links).filter((e): e is [string, string] => typeof e[1] === 'string' && e[0].length <= 80),

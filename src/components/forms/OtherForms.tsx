@@ -32,6 +32,9 @@ export const AccountForm = ({ open, onClose, state }: Base & { state: Extract<Sh
   const [limit, setLimit] = useState(existing?.creditLimit ? String(existing.creditLimit) : '')
   const [statementDay, setStatementDay] = useState(existing?.statementDay ? String(existing.statementDay) : '')
   const [paymentDay, setPaymentDay] = useState(existing?.paymentDay ? String(existing.paymentDay) : '')
+  const [rate, setRate] = useState(existing?.interestRate ? String(existing.interestRate).replace('.', ',') : '')
+  const rateValue = rate.trim() ? Number(rate.replace(',', '.')) : undefined
+  const rateOk = rateValue === undefined || (Number.isFinite(rateValue) && rateValue >= 0 && rateValue <= 30)
 
   const save = () => {
     const credit = isCredit
@@ -39,8 +42,9 @@ export const AccountForm = ({ open, onClose, state }: Base & { state: Extract<Sh
           creditLimit: Number(limit) > 0 ? Number(limit) : undefined,
           statementDay: statementDay ? Number(statementDay) : undefined,
           paymentDay: paymentDay ? Number(paymentDay) : undefined,
+          interestRate: rateOk && rateValue ? Math.round(rateValue * 100) / 100 : undefined,
         }
-      : { creditLimit: undefined, statementDay: undefined, paymentDay: undefined }
+      : { creditLimit: undefined, statementDay: undefined, paymentDay: undefined, interestRate: undefined }
     // En tarjetas de crédito el monto ingresado es deuda: saldo negativo
     const signed = (Number(balance) || 0) * (isCredit || negative ? -1 : 1)
     vibrate(12)
@@ -177,6 +181,26 @@ export const AccountForm = ({ open, onClose, state }: Base & { state: Extract<Sh
                   </Select>
                 </Field>
               </div>
+              <Field
+                label="Tasa de interés mensual (opcional)"
+                hint={
+                  rateOk
+                    ? 'Sale en tu estado de cuenta como "tasa de interés mensual". Con ella te digo cuánto pagas de más en cuotas.'
+                    : 'Escribe un número entre 0 y 30, por ejemplo 2,9'
+                }
+              >
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={rate}
+                    onChange={(e) => setRate(e.target.value.replace(/[^\d.,]/g, '').slice(0, 5))}
+                    inputMode="decimal"
+                    placeholder="Ej: 2,9"
+                    aria-label="Tasa de interés mensual"
+                    className="w-28"
+                  />
+                  <span className="text-sm font-semibold text-muted">% al mes</span>
+                </div>
+              </Field>
               <p className="text-xs text-muted">Los encuentras en tu estado de cuenta o en la app de tu banco.</p>
             </div>
           )}

@@ -39,6 +39,7 @@ import { Avatar } from '../components/forms/LoanForms'
 import { TxItem } from '../components/TxItem'
 import { QuickAddBar } from '../features/quick/QuickAddBar'
 import { GroupsDashCard } from '../features/groups/GroupsDashCard'
+import { FutureCard } from '../features/future/FutureCard'
 import { AnimatedMoney, Card, cx, DeltaPill, EmptyState, IconButton, ProgressBar, Ring, SectionHeader } from '../components/ui'
 
 const greeting = () => {
@@ -410,6 +411,8 @@ export default function Dashboard() {
               </p>
             )}
           </Card>
+
+          <FutureCard compact />
 
           {/* Préstamos */}
           <Card>

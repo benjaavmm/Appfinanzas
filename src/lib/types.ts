@@ -20,6 +20,8 @@ export interface Account {
   statementDay?: number
   /** Tarjetas de crédito: día del mes en que vence el pago */
   paymentDay?: number
+  /** Tarjetas de crédito: tasa de interés mensual en % (la del estado de cuenta), para cuotas con interés y el plan de deudas */
+  interestRate?: number
   createdAt: string
 }
 
@@ -58,6 +60,8 @@ export interface Transaction {
   receiptId?: ID
   /** Movimiento creado al dividir una cuenta (agrupa el gasto propio y los préstamos) */
   splitId?: ID
+  /** Meses de garantía desde la fecha de compra (legal o de la tienda) */
+  warrantyMonths?: number
   createdAt: string
 }
 
@@ -97,6 +101,8 @@ export interface Loan {
   payments: LoanPayment[]
   /** Préstamo creado al dividir una cuenta */
   splitId?: ID
+  /** Lo que yo debo: tasa de interés mensual en % (para el plan de deudas) */
+  interestRate?: number
   /** Si es un préstamo compartido con un amigo de la app */
   shared?: SharedLoanLink
   createdAt: string
@@ -162,6 +168,14 @@ export interface ReminderSettings {
   dailyHour?: number
   /** Resumen semanal (domingo) y de fin/inicio de mes */
   weekly?: boolean
+  /** Garantías por vencer */
+  warranties?: boolean
+}
+
+/** Lo que el asistente aprendió de ti: "cuando digo 'el chino' es el almacén" */
+export interface AssistantAlias {
+  categoryId?: ID
+  place?: string
 }
 
 export interface Settings {
@@ -183,8 +197,15 @@ export interface Settings {
    * cada tarjeta o banco. Claves como "card:1234" o "bank:santander:credito".
    */
   bankLinks?: Record<string, ID>
-  /** Asistente: nombre y personalidad */
-  assistant?: { name?: string; personality?: string }
+  /** Asistente: nombre, personalidad y lo que aprendió de ti */
+  assistant?: {
+    name?: string
+    personality?: string
+    /** Palabras tuyas → categoría o lugar ("la micro" → Transporte) */
+    aliases?: Record<string, AssistantAlias>
+    /** Día del mes en que te pagan el sueldo */
+    payday?: number
+  }
 }
 
 export interface FinanceData {

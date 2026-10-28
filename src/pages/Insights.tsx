@@ -18,6 +18,7 @@ import { useData, useMoney, useToday } from '../lib/hooks'
 import { generateInsights, healthScore } from '../lib/insights'
 import { CalendarHeatmap, CategoryDonut, CategoryList, CumulativeChart, MonthlyBars, WeekdayBars } from '../components/charts'
 import { InsightCard } from '../components/InsightCard'
+import { FutureCard } from '../features/future/FutureCard'
 import { TxItem } from '../components/TxItem'
 import { Card, cx, EmptyState, PageHeader, ProgressBar, Ring, SectionHeader, Segmented, Stat } from '../components/ui'
 import { MonthSwitcher } from '../components/ui/pickers'
@@ -151,6 +152,10 @@ export default function Insights() {
             </div>
           </section>
         )}
+
+        <div className="lg:col-span-2">
+          <FutureCard />
+        </div>
 
         <Card className="lg:col-span-2">
           <SectionHeader title="Ingresos vs gastos" subtitle="Últimos 6 meses · toca un mes para verlo" />
