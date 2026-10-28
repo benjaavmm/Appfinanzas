@@ -13,6 +13,15 @@ const debt = (over: Partial<Debt>): Debt => ({
 })
 
 describe('plan para salir de deudas', () => {
+  it('una tarjeta sin tasa anotada va antes que un préstamo sin interés (avalancha)', () => {
+    const debts = [
+      debt({ id: 'mama', name: 'Mamá', balance: 25000, kind: 'loan', rateKnown: false }),
+      debt({ id: 'tc', name: 'Tarjeta', balance: 600000, minimum: 50000, rateKnown: false }),
+    ]
+    expect(simulatePlan(debts, 30000, 'avalanche').priority).toEqual(['tc', 'mama'])
+    expect(simulatePlan(debts, 30000, 'snowball').priority).toEqual(['mama', 'tc'])
+  })
+
   it('sin intereses: 300.000 con 100.000 al mes son 3 meses', () => {
     const r = simulatePlan([debt({ balance: 300000 })], 100000)
     expect(r).toMatchObject({ feasible: true, months: 3, totalInterest: 0, totalPaid: 300000 })

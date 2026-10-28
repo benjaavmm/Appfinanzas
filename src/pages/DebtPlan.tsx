@@ -162,10 +162,11 @@ export default function DebtPlan() {
         <Card>
           <p className="text-sm font-bold">El orden</p>
           <ol className="mt-2 space-y-3">
-            {plan.payoffs.map((p, i) => {
-              const d = debts.find((x) => x.id === p.id)!
+            {plan.priority.map((id, i) => {
+              const d = debts.find((x) => x.id === id)!
+              const month = plan.payoffs.find((x) => x.id === id)?.month ?? Infinity
               return (
-                <li key={p.id} className="flex gap-3">
+                <li key={id} className="flex gap-3">
                   <span
                     className={cx(
                       'flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
@@ -181,13 +182,13 @@ export default function DebtPlan() {
                     <p className="text-xs text-muted">
                       Debes {fmt(d.balance)}
                       {d.minimum > 0 ? ` · pagas ${fmt(d.minimum)}/mes` : ''}
-                      {Number.isFinite(p.month) ? ` · la terminas en ${monthLabel(today, p.month).toLowerCase()}` : ''}
+                      {Number.isFinite(month) ? ` · la terminas en ${monthLabel(today, month).toLowerCase()}` : ''}
                     </p>
                     <div className="mt-1">
                       <RateInput debt={d} />
                     </div>
                   </div>
-                  {Number.isFinite(p.month) && <Check className="mt-1 size-4 shrink-0 text-good" aria-hidden />}
+                  {Number.isFinite(month) && <Check className="mt-1 size-4 shrink-0 text-good" aria-hidden />}
                 </li>
               )
             })}

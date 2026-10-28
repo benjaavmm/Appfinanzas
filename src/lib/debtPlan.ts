@@ -83,21 +83,30 @@ export interface PlanResult {
   /** Lo que pagas al mes en total (mínimos + extra) */
   monthly: number
   payoffs: Payoff[]
+  /** Las deudas en el orden de la estrategia: la primera recibe el extra */
+  priority: string[]
 }
 
 const MAX_MONTHS = 360
 
+/** Tasa mensual típica de una tarjeta en Chile: solo para ordenar si no pusiste la tuya */
+const USUAL_CARD_RATE = 2.5
+
+type Orderable = Pick<Debt, 'id' | 'balance' | 'rate'> & Partial<Pick<Debt, 'kind' | 'rateKnown'>>
+const sortRate = (d: Orderable) => (d.rateKnown === false && d.kind === 'card' ? USUAL_CARD_RATE : d.rate)
+
 /** Ordena las deudas según la estrategia (la primera recibe el extra) */
-const order = (debts: { id: string; balance: number; rate: number }[], strategy: Strategy) =>
+const order = <T extends Orderable>(debts: T[], strategy: Strategy) =>
   [...debts].sort((a, b) =>
     strategy === 'avalanche'
-      ? b.rate - a.rate || a.balance - b.balance || a.id.localeCompare(b.id)
-      : a.balance - b.balance || b.rate - a.rate || a.id.localeCompare(b.id),
+      ? sortRate(b) - sortRate(a) || a.balance - b.balance || a.id.localeCompare(b.id)
+      : a.balance - b.balance || sortRate(b) - sortRate(a) || a.id.localeCompare(b.id),
   )
 
 export const simulatePlan = (debts: Debt[], extra: number, strategy: Strategy = 'avalanche'): PlanResult => {
   const state = debts.filter((d) => d.balance > 0).map((d) => ({ ...d, left: d.balance, interest: 0, paidOff: 0 }))
   const minimumSum = state.reduce((s, d) => s + d.minimum, 0)
+  const priority = order(state, strategy).map((d) => d.id)
   // El presupuesto mensual queda fijo: lo que liberas al terminar una deuda pasa a las demás
   const budget = minimumSum + Math.max(0, extra)
   let totalInterest = 0
@@ -145,6 +154,7 @@ export const simulatePlan = (debts: Debt[], extra: number, strategy: Strategy = 
         totalPaid: Math.round(totalPaid),
         monthly: Math.round(budget),
         payoffs: [],
+        priority,
       }
   }
   const feasible = state.every((d) => d.left <= 0.5)
@@ -157,6 +167,7 @@ export const simulatePlan = (debts: Debt[], extra: number, strategy: Strategy = 
     payoffs: state
       .map((d) => ({ id: d.id, name: d.name, month: d.paidOff || Infinity, interest: Math.round(d.interest) }))
       .sort((a, b) => a.month - b.month),
+    priority,
   }
 }
 

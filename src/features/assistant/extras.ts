@@ -199,7 +199,7 @@ export const debtPlanReply = (data: FinanceData, today: DateStr, fmt: Fmt): Repl
     }
   const total = r.debts.reduce((s, d) => s + d.balance, 0)
   const missing = r.debts.filter((d) => d.kind === 'card' && !d.rateKnown).map((d) => d.name)
-  const first = r.plan.payoffs[0] && r.debts.find((d) => d.id === r.plan.payoffs[0].id)
+  const first = r.debts.find((d) => d.id === r.plan.priority[0])
   const why = `Junto lo que debes en cada tarjeta y préstamo con su tasa, sigo pagando lo que ya pagas cada mes y le sumo ${fmt(extra)} extra${surplus > 0 ? ` (la mitad de lo que te sobra en un mes normal, ${fmt(surplus)})` : ''}. El extra va primero a la deuda con la tasa más alta (avalancha); cuando terminas una, lo que pagabas pasa a la siguiente. Lo comparo con pagar solo lo mínimo.`
   if (!r.plan.feasible)
     return {
@@ -216,16 +216,21 @@ export const debtPlanReply = (data: FinanceData, today: DateStr, fmt: Fmt): Repl
         ? ' (pagando solo lo mínimo no terminarías nunca)'
         : ''
   return {
-    text: `Debes **${fmt(total)}** en ${r.debts.length} ${r.debts.length === 1 ? 'deuda' : 'deudas'}. Si pones **${fmt(extra)} extra al mes**, quedas libre en **${r.freeLabel?.toLowerCase()}**${saved}. Empieza por **${first?.name}**${first?.rate ? `, que tiene la tasa más alta (${String(first.rate).replace('.', ',')}% al mes)` : ''}.${
-      missing.length ? ` Para que el cálculo sea exacto, agrega la tasa de ${missing.join(' y ')} en el plan.` : ''
-    }`,
-    rows: r.plan.payoffs.map((p, i) => {
-      const d = r.debts.find((x) => x.id === p.id)!
+    text: `Debes **${fmt(total)}** en ${r.debts.length} ${r.debts.length === 1 ? 'deuda' : 'deudas'}. Si pones **${fmt(extra)} extra al mes**, quedas libre en **${r.freeLabel?.toLowerCase()}**${saved}. Empieza por **${first?.name}**${
+      first?.rate
+        ? `, que tiene la tasa más alta (${String(first.rate).replace('.', ',')}% al mes)`
+        : first?.kind === 'card' && !first.rateKnown
+          ? ', porque las tarjetas cobran harto interés'
+          : ''
+    }.${missing.length ? ` Para que el cálculo sea exacto, agrega la tasa de ${missing.join(' y ')} en el plan.` : ''}`,
+    rows: r.plan.priority.map((id, i) => {
+      const d = r.debts.find((x) => x.id === id)!
+      const month = r.plan.payoffs.find((x) => x.id === id)?.month ?? Infinity
       return {
         icon: `${i + 1}.`,
         label: d.name,
         sub: `Debes ${fmt(d.balance)}`,
-        value: Number.isFinite(p.month) ? monthLabel(today, p.month) : '—',
+        value: Number.isFinite(month) ? monthLabel(today, month) : '—',
       }
     }),
     why,
