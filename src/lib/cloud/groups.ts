@@ -40,7 +40,7 @@ interface MemberRow {
 }
 interface EntryRow {
   id: string
-  kind: 'expense' | 'payment'
+  kind: 'expense' | 'payment' | 'contribution'
   description: string | null
   amount: number | string
   entry_date: string
@@ -55,9 +55,21 @@ interface GroupRow {
   currency: string
   invite_code: string
   updated_at: string
+  weights?: Record<string, number | string> | null
+  goal_name?: string | null
+  goal_amount?: number | string | null
   group_members: MemberRow[]
   group_entries: EntryRow[]
 }
+
+/** Reparto y meta como vienen de la base */
+const rules = (r: Pick<GroupRow, 'weights' | 'goal_name' | 'goal_amount'>): Pick<Group, 'weights' | 'goal'> => ({
+  weights:
+    r.weights && typeof r.weights === 'object'
+      ? Object.fromEntries(Object.entries(r.weights).map(([k, v]) => [k, Number(v)]))
+      : undefined,
+  goal: r.goal_name && Number(r.goal_amount) > 0 ? { name: r.goal_name, amount: Number(r.goal_amount) } : undefined,
+})
 
 const toEntry = (r: EntryRow): GroupEntry => ({
   id: r.id,
@@ -80,6 +92,7 @@ export const toGroup = (r: GroupRow, me: string | null): Group => ({
   currency: r.currency,
   inviteCode: r.invite_code,
   updatedAt: r.updated_at,
+  ...rules(r),
   members: [...(r.group_members ?? [])]
     .sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''))
     .map((m) => ({ id: m.id, name: m.name, joined: !!m.user_id, me: !!me && m.user_id === me })),
@@ -100,7 +113,7 @@ export const loadGroups = async (force = false): Promise<void> => {
     const { data, error } = await sb
       .from('groups')
       .select(
-        'id, name, emoji, currency, invite_code, updated_at, group_members(id, user_id, name, created_at), group_entries(id, kind, description, amount, entry_date, paid_by, shares, created_at)',
+        'id, name, emoji, currency, invite_code, updated_at, weights, goal_name, goal_amount, group_members(id, user_id, name, created_at), group_entries(id, kind, description, amount, entry_date, paid_by, shares, created_at)',
       )
       .order('updated_at', { ascending: false })
     if (error) throw error
@@ -151,7 +164,7 @@ export const leaveGroup = (groupId: string) => mutate<void>('group_leave', { p_g
 export const addGroupEntry = (
   groupId: string,
   e: {
-    kind: 'expense' | 'payment'
+    kind: 'expense' | 'payment' | 'contribution'
     description?: string
     amount: number
     date: string
@@ -171,13 +184,26 @@ export const addGroupEntry = (
 
 export const deleteGroupEntry = (entryId: string) => mutate<void>('group_delete_entry', { p_entry: entryId })
 
+/** Reparto por defecto (null = partes iguales) y meta compartida (null = sin meta) */
+export const setGroupRules = (
+  groupId: string,
+  weights: Record<string, number> | null,
+  goal: { name: string; amount: number } | null,
+) =>
+  mutate<void>('group_set_rules', {
+    p_group: groupId,
+    p_weights: weights,
+    p_goal_name: goal?.name ?? null,
+    p_goal_amount: goal?.amount ?? null,
+  })
+
 export interface PublicGroup extends Group {
   /** Ya soy integrante (con mi cuenta) */
   isMember: boolean
 }
 
 interface PublicRow {
-  group: { id: string; name: string; emoji: string; currency: string }
+  group: { id: string; name: string; emoji: string; currency: string } & Pick<GroupRow, 'weights' | 'goal_name' | 'goal_amount'>
   members: { id: string; name: string; joined: boolean; me: boolean }[]
   entries: EntryRow[]
 }
@@ -187,8 +213,10 @@ export const fetchPublicGroup = async (code: string): Promise<PublicGroup | null
   const data = await rpc<PublicRow | null>('group_public', { p_code: code })
   if (!data?.group) return null
   const members: GroupMember[] = data.members.map((m) => ({ id: m.id, name: m.name, joined: m.joined, me: m.me }))
+  const { weights, goal_name, goal_amount, ...g } = data.group
   return {
-    ...data.group,
+    ...g,
+    ...rules({ weights, goal_name, goal_amount }),
     inviteCode: code,
     members,
     entries: sortEntries((data.entries ?? []).map(toEntry)),

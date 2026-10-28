@@ -560,6 +560,14 @@ create table if not exists public.group_entries (
 );
 create index if not exists group_entries_group on public.group_entries (group_id, entry_date);
 
+-- Reparto por defecto (p. ej. en pareja según lo que gana cada uno) y meta compartida (la "vaca")
+alter table public.groups add column if not exists weights jsonb;
+alter table public.groups add column if not exists goal_name text check (char_length(goal_name) <= 40);
+alter table public.groups add column if not exists goal_amount numeric(14, 2) check (goal_amount is null or (goal_amount > 0 and goal_amount < 1e12));
+-- Aportes a la meta: no son gastos ni deudas entre ellos
+alter table public.group_entries drop constraint if exists group_entries_kind_check;
+alter table public.group_entries add constraint group_entries_kind_check check (kind in ('expense', 'payment', 'contribution'));
+
 create or replace function public.is_group_member(g uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from group_members m where m.group_id = g and m.user_id = auth.uid());
@@ -686,18 +694,23 @@ returns uuid language plpgsql security definer set search_path = public as $$
 declare e uuid; total numeric := 0; k text; v numeric; cnt int := 0;
 begin
   perform group_me(p_group);
-  if p_kind not in ('expense', 'payment') then raise exception 'invalid_kind'; end if;
+  if p_kind not in ('expense', 'payment', 'contribution') then raise exception 'invalid_kind'; end if;
   if p_amount is null or p_amount <= 0 or p_amount >= 1e12 then raise exception 'invalid_amount'; end if;
   if not exists (select 1 from group_members where id = p_paid_by and group_id = p_group) then raise exception 'invalid_member'; end if;
   if jsonb_typeof(p_shares) <> 'object' then raise exception 'invalid_shares'; end if;
-  for k, v in select key, (value #>> '{}')::numeric from jsonb_each(p_shares) loop
-    if v < 0 then raise exception 'invalid_shares'; end if;
-    if not exists (select 1 from group_members where id = k::uuid and group_id = p_group) then raise exception 'invalid_member'; end if;
-    total := total + v;
-    cnt := cnt + 1;
-  end loop;
-  if cnt = 0 or abs(total - p_amount) > 0.01 then raise exception 'shares_mismatch'; end if;
-  if p_kind = 'payment' and (cnt <> 1 or p_shares ? p_paid_by::text) then raise exception 'invalid_payment'; end if;
+  -- Un aporte a la meta no se reparte entre nadie
+  if p_kind = 'contribution' then
+    if p_shares <> '{}'::jsonb then raise exception 'invalid_shares'; end if;
+  else
+    for k, v in select key, (value #>> '{}')::numeric from jsonb_each(p_shares) loop
+      if v < 0 then raise exception 'invalid_shares'; end if;
+      if not exists (select 1 from group_members where id = k::uuid and group_id = p_group) then raise exception 'invalid_member'; end if;
+      total := total + v;
+      cnt := cnt + 1;
+    end loop;
+    if cnt = 0 or abs(total - p_amount) > 0.01 then raise exception 'shares_mismatch'; end if;
+    if p_kind = 'payment' and (cnt <> 1 or p_shares ? p_paid_by::text) then raise exception 'invalid_payment'; end if;
+  end if;
   if (select count(*) from group_entries where group_id = p_group) >= 3000 then raise exception 'too_many_entries'; end if;
   insert into group_entries (group_id, kind, description, amount, entry_date, paid_by, shares, created_by)
   values (p_group, p_kind, nullif(left(btrim(coalesce(p_description, '')), 80), ''), p_amount,
@@ -705,6 +718,31 @@ begin
   returning id into e;
   update groups set updated_at = now() where id = p_group;
   return e;
+end;
+$$;
+
+-- Reparto por defecto (porcentajes por integrante, suman 100; null = partes iguales) y meta compartida
+create or replace function public.group_set_rules(p_group uuid, p_weights jsonb, p_goal_name text, p_goal_amount numeric)
+returns void language plpgsql security definer set search_path = public as $$
+declare total numeric := 0; k text; v numeric;
+begin
+  perform group_me(p_group);
+  if p_weights is not null and p_weights <> 'null'::jsonb then
+    if jsonb_typeof(p_weights) <> 'object' then raise exception 'invalid_weights'; end if;
+    for k, v in select key, (value #>> '{}')::numeric from jsonb_each(p_weights) loop
+      if v < 0 or v > 100 then raise exception 'invalid_weights'; end if;
+      if not exists (select 1 from group_members where id = k::uuid and group_id = p_group) then raise exception 'invalid_member'; end if;
+      total := total + v;
+    end loop;
+    if abs(total - 100) > 0.5 then raise exception 'invalid_weights'; end if;
+  end if;
+  if p_goal_amount is not null and (p_goal_amount <= 0 or p_goal_amount >= 1e12) then raise exception 'invalid_amount'; end if;
+  update groups set
+    weights = case when p_weights is null or p_weights = 'null'::jsonb then null else p_weights end,
+    goal_name = nullif(left(btrim(coalesce(p_goal_name, '')), 40), ''),
+    goal_amount = p_goal_amount,
+    updated_at = now()
+  where id = p_group;
 end;
 $$;
 
@@ -725,7 +763,8 @@ $$;
 create or replace function public.group_public(p_code text)
 returns jsonb language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
-    'group', jsonb_build_object('id', g.id, 'name', g.name, 'emoji', g.emoji, 'currency', g.currency),
+    'group', jsonb_build_object('id', g.id, 'name', g.name, 'emoji', g.emoji, 'currency', g.currency,
+      'weights', g.weights, 'goal_name', g.goal_name, 'goal_amount', g.goal_amount),
     'members', coalesce((select jsonb_agg(jsonb_build_object('id', m.id, 'name', m.name, 'joined', m.user_id is not null,
       'me', m.user_id is not null and m.user_id = auth.uid()) order by m.created_at) from group_members m where m.group_id = g.id), '[]'),
     'entries', coalesce((select jsonb_agg(jsonb_build_object('id', e.id, 'kind', e.kind, 'description', e.description,
@@ -766,6 +805,7 @@ revoke all on function public.group_rotate_code(uuid) from public, anon;
 revoke all on function public.group_leave(uuid) from public, anon;
 revoke all on function public.group_add_entry(uuid, text, text, numeric, date, uuid, jsonb) from public, anon;
 revoke all on function public.group_delete_entry(uuid) from public, anon;
+revoke all on function public.group_set_rules(uuid, jsonb, text, numeric) from public, anon;
 revoke all on function public.group_public(text) from public;
 revoke all on function public.group_join(text, uuid, text) from public, anon;
 grant execute on function public.is_group_member(uuid) to authenticated;
@@ -778,6 +818,7 @@ grant execute on function public.group_rotate_code(uuid) to authenticated;
 grant execute on function public.group_leave(uuid) to authenticated;
 grant execute on function public.group_add_entry(uuid, text, text, numeric, date, uuid, jsonb) to authenticated;
 grant execute on function public.group_delete_entry(uuid) to authenticated;
+grant execute on function public.group_set_rules(uuid, jsonb, text, numeric) to authenticated;
 grant execute on function public.group_public(text) to anon, authenticated;
 grant execute on function public.group_join(text, uuid, text) to authenticated;
 

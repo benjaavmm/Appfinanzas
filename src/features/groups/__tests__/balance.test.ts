@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { equalShares, groupBalances, myStanding, settleGroup, type Group, type GroupEntry } from '../balance'
+import {
+  equalShares,
+  goalProgress,
+  groupBalances,
+  myStanding,
+  settleGroup,
+  weightedShares,
+  weightsLabel,
+  type Group,
+  type GroupEntry,
+} from '../balance'
 
 const members = [
   { id: 'yo', name: 'Benja', joined: true, me: true },
@@ -91,5 +101,40 @@ describe('saldos del grupo', () => {
       }
       expect(Object.values(bal).every((v) => v === 0)).toBe(true)
     }
+  })
+})
+
+describe('pareja y meta compartida', () => {
+  const two = [
+    { id: 'yo', name: 'Benja', joined: true, me: true },
+    { id: 'jaz', name: 'Jazmín', joined: true, me: false },
+  ]
+  const weights = { yo: 60, jaz: 40 }
+
+  it('reparte según el % del grupo (60/40) y el redondeo va a quien pagó', () => {
+    expect(weightedShares(100000, ['yo', 'jaz'], weights, 'yo')).toEqual({ yo: 60000, jaz: 40000 })
+    expect(weightedShares(10001, ['yo', 'jaz'], weights, 'jaz')).toEqual({ yo: 6000, jaz: 4001 })
+    // Si solo uno consume, se lleva todo
+    expect(weightedShares(5000, ['jaz'], weights, 'yo')).toEqual({ jaz: 5000 })
+    expect(weightsLabel({ members: two, weights })).toBe('Tú 60% · Jazmín 40%')
+  })
+
+  it('los aportes a la meta no son deudas y suman al avance', () => {
+    const g: Group = {
+      id: 'g',
+      name: 'Pareja',
+      emoji: '💑',
+      currency: 'CLP',
+      members: two,
+      goal: { name: 'Viaje a Pucón', amount: 600000 },
+      entries: [
+        entry({ kind: 'contribution', amount: 150000, paidBy: 'yo', shares: {} }),
+        entry({ kind: 'contribution', amount: 90000, paidBy: 'jaz', shares: {} }),
+        entry({ amount: 100000, paidBy: 'yo', shares: weightedShares(100000, ['yo', 'jaz'], weights, 'yo') }),
+      ],
+    }
+    expect(groupBalances(g)).toEqual({ yo: 40000, jaz: -40000 })
+    expect(goalProgress(g)).toMatchObject({ saved: 240000, target: 600000, left: 360000, byMember: { yo: 150000, jaz: 90000 } })
+    expect(goalProgress(g).ratio).toBeCloseTo(0.4, 5)
   })
 })

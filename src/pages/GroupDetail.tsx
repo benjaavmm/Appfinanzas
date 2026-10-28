@@ -2,7 +2,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { ArrowLeft, Check, HandCoins, LoaderCircle, MessageCircle, Plus, Settings2, Share2, UserPlus } from 'lucide-react'
-import { Button, Card, Chip, cx, EmptyState, Field, IconButton, Input, PageHeader, Segmented, Toggle } from '../components/ui'
+import {
+  Button,
+  Card,
+  Chip,
+  cx,
+  EmptyState,
+  Field,
+  IconButton,
+  Input,
+  PageHeader,
+  ProgressBar,
+  Segmented,
+  Toggle,
+} from '../components/ui'
 import { AccountChips, AmountInput, CategoryGrid } from '../components/ui/pickers'
 import { Sheet } from '../components/ui/Sheet'
 import { useAuth } from '../lib/cloud/auth'
@@ -15,6 +28,7 @@ import {
   loadGroups,
   removeGroupMember,
   rotateGroupCode,
+  setGroupRules,
   updateGroup,
   useGroups,
 } from '../lib/cloud/groups'
@@ -27,12 +41,15 @@ import { ask, toast } from '../lib/ui'
 import type { DateStr } from '../lib/types'
 import {
   equalShares,
+  goalProgress,
   groupBalances,
   groupChargeText,
   groupInviteText,
   groupSpent,
   myShareTotal,
   myStanding,
+  weightedShares,
+  weightsLabel,
   type Group,
   type GroupTransfer,
 } from '../features/groups/balance'
@@ -91,7 +108,8 @@ const ExpenseSheet = ({ group, open, onClose }: { group: Group; open: boolean; o
   const [date, setDate] = useState<DateStr>(todayStr)
   const [paidBy, setPaidBy] = useState(me?.id ?? group.members[0]?.id ?? '')
   const [included, setIncluded] = useState<string[]>(() => group.members.map((m) => m.id))
-  const [mode, setMode] = useState<'equal' | 'custom'>('equal')
+  // Con reparto del grupo (p. ej. 60/40 en pareja), parte con esos %
+  const [mode, setMode] = useState<'weights' | 'equal' | 'custom'>(group.weights ? 'weights' : 'equal')
   const [custom, setCustom] = useState<Record<string, string>>({})
   const [recordMine, setRecordMine] = useState(true)
   const [accountId, setAccountId] = useState(
@@ -110,33 +128,44 @@ const ExpenseSheet = ({ group, open, onClose }: { group: Group; open: boolean; o
   const result =
     total <= 0 || !list.length
       ? null
-      : mode === 'equal'
+      : mode === 'weights' && group.weights
         ? ({
             ok: true,
-            shares: equalShares(
+            shares: weightedShares(
               total,
               list.map((m) => m.id),
+              group.weights,
               paidBy,
               decimals,
             ),
           } as const)
-        : (() => {
-            const r = trySplit(
-              total,
-              list.map((m) => ({
-                name: m.id,
-                me: m.id === paidBy,
-                amount: custom[m.id] === undefined || custom[m.id] === '' ? undefined : Number(custom[m.id]),
-              })),
-              decimals,
-            )
-            return r.ok
-              ? ({ ok: true, shares: Object.fromEntries(r.shares.map((s) => [s.name, s.amount])) } as const)
-              : ({
-                  ok: false,
-                  text: r.error.code === 'over' ? 'Las partes suman más que el total' : 'Las partes no suman el total',
-                } as const)
-          })()
+        : mode !== 'custom'
+          ? ({
+              ok: true,
+              shares: equalShares(
+                total,
+                list.map((m) => m.id),
+                paidBy,
+                decimals,
+              ),
+            } as const)
+          : (() => {
+              const r = trySplit(
+                total,
+                list.map((m) => ({
+                  name: m.id,
+                  me: m.id === paidBy,
+                  amount: custom[m.id] === undefined || custom[m.id] === '' ? undefined : Number(custom[m.id]),
+                })),
+                decimals,
+              )
+              return r.ok
+                ? ({ ok: true, shares: Object.fromEntries(r.shares.map((s) => [s.name, s.amount])) } as const)
+                : ({
+                    ok: false,
+                    text: r.error.code === 'over' ? 'Las partes suman más que el total' : 'Las partes no suman el total',
+                  } as const)
+            })()
   const shares = result?.ok ? result.shares : null
   const myShare = me && shares ? (shares[me.id] ?? 0) : 0
   const canRecord = myShare > 0 && group.currency === store.settings.currency && !!accountId
@@ -242,10 +271,14 @@ const ExpenseSheet = ({ group, open, onClose }: { group: Group; open: boolean; o
             value={mode}
             onChange={setMode}
             options={[
+              ...(group.weights ? [{ value: 'weights' as const, label: 'Según %' }] : []),
               { value: 'equal', label: 'Partes iguales' },
               { value: 'custom', label: 'Montos distintos' },
             ]}
           />
+          {mode === 'weights' && group.weights && (
+            <p className="mt-2 text-xs text-muted">Reparto del grupo: {weightsLabel(group)}</p>
+          )}
           {mode === 'custom' && list.length > 0 && (
             <ul className="mt-3 space-y-2 rounded-2xl bg-surface-2 p-3">
               {list.map((m) => (
@@ -360,13 +393,97 @@ const PaymentSheet = ({ group, transfer, onClose }: { group: Group; transfer: Gr
   )
 }
 
+/* ───────────── Aportar a la meta ───────────── */
+
+const ContributionSheet = ({ group, open, onClose }: { group: Group; open: boolean; onClose: () => void }) => {
+  const { fmt } = useGroupMoney(group.currency)
+  const me = group.members.find((m) => m.me)
+  const [amount, setAmount] = useState('')
+  const [who, setWho] = useState(me?.id ?? group.members[0]?.id ?? '')
+  const [date, setDate] = useState<DateStr>(todayStr)
+  const [busy, setBusy] = useState(false)
+  const value = Number(amount) || 0
+  const save = async () => {
+    if (value <= 0 || busy) return
+    setBusy(true)
+    try {
+      await addGroupEntry(group.id, { kind: 'contribution', amount: value, date, paidBy: who, shares: {} })
+      vibrate(18)
+      toast({ message: `🎯 ${fmt(value)} más para ${group.goal?.name ?? 'la meta'}`, tone: 'good' })
+      onClose()
+    } catch (e) {
+      fail(e)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={`Aportar a ${group.goal?.name ?? 'la meta'}`}
+      footer={
+        <Button block size="lg" onClick={() => void save()} disabled={value <= 0 || busy}>
+          {busy ? 'Guardando…' : 'Aportar'}
+        </Button>
+      }
+    >
+      <div className="space-y-5">
+        <AmountInput value={amount} onChange={setAmount} autoFocus label="Monto" />
+        <div>
+          <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">¿Quién aporta?</p>
+          <div className="flex flex-wrap gap-2">
+            {group.members.map((m) => (
+              <Chip key={m.id} active={who === m.id} onClick={() => setWho(m.id)}>
+                {m.me ? 'Yo' : m.name}
+              </Chip>
+            ))}
+          </div>
+        </div>
+        <Field label="Fecha">
+          <DateChips date={date} setDate={setDate} />
+        </Field>
+        <p className="text-xs text-muted">Los aportes no son deudas entre ustedes: solo suman para la meta.</p>
+      </div>
+    </Sheet>
+  )
+}
+
 /* ───────────── Ajustes del grupo ───────────── */
 
 const SettingsSheet = ({ group, open, onClose }: { group: Group; open: boolean; onClose: () => void }) => {
   const navigate = useNavigate()
+  const { fmt, decimals } = useGroupMoney(group.currency)
+  const locale = useStore((s) => s.settings.locale)
   const [name, setName] = useState(group.name)
   const [emoji, setEmoji] = useState(group.emoji)
   const [busy, setBusy] = useState(false)
+  const [split, setSplit] = useState<'equal' | 'percent' | 'income'>(group.weights ? 'percent' : 'equal')
+  const [pcts, setPcts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(group.members.map((m) => [m.id, group.weights?.[m.id] !== undefined ? String(group.weights[m.id]) : ''])),
+  )
+  const [incomes, setIncomes] = useState<Record<string, string>>({})
+  const [goalName, setGoalName] = useState(group.goal?.name ?? '')
+  const [goalAmount, setGoalAmount] = useState(group.goal ? String(group.goal.amount) : '')
+
+  // % a partir de lo que gana cada uno (redondeados para que sumen 100)
+  const fromIncomes = (): Record<string, number> | null => {
+    const vals = group.members.map((m) => ({ id: m.id, v: Number(incomes[m.id]) || 0 }))
+    const sum = vals.reduce((a, b) => a + b.v, 0)
+    if (sum <= 0) return null
+    const out = Object.fromEntries(vals.map((x) => [x.id, Math.round((x.v / sum) * 100)]))
+    const diff = 100 - Object.values(out).reduce((a, b) => a + b, 0)
+    const top = vals.sort((a, b) => b.v - a.v)[0].id
+    out[top] += diff
+    return out
+  }
+  const fromPcts = (): Record<string, number> => Object.fromEntries(group.members.map((m) => [m.id, Number(pcts[m.id]) || 0]))
+  const weights = split === 'equal' ? null : split === 'income' ? fromIncomes() : fromPcts()
+  const weightSum = weights ? Object.values(weights).reduce((a, b) => a + b, 0) : 100
+  const weightsOk = split === 'equal' || (!!weights && Math.abs(weightSum - 100) <= 0.5)
+  const goalValue = Number(goalAmount) || 0
+  const goalOk = (!goalName.trim() && !goalValue) || (!!goalName.trim() && goalValue > 0)
+
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true)
     try {
@@ -389,9 +506,17 @@ const SettingsSheet = ({ group, open, onClose }: { group: Group; open: boolean; 
         <Button
           block
           size="lg"
-          disabled={busy || !name.trim()}
+          disabled={busy || !name.trim() || !weightsOk || !goalOk}
           onClick={async () => {
-            if (await run(() => updateGroup(group.id, name, emoji), 'Grupo actualizado')) onClose()
+            const save = async () => {
+              await updateGroup(group.id, name, emoji)
+              await setGroupRules(
+                group.id,
+                weights,
+                goalName.trim() && goalValue > 0 ? { name: goalName.trim(), amount: goalValue } : null,
+              )
+            }
+            if (await run(save, 'Grupo actualizado')) onClose()
           }}
         >
           Guardar
@@ -419,6 +544,84 @@ const SettingsSheet = ({ group, open, onClose }: { group: Group; open: boolean; 
             </button>
           ))}
         </div>
+        <div className="border-t border-line pt-4">
+          <p className="text-sm font-bold">Cómo se reparten los gastos</p>
+          <p className="text-xs text-muted">Es lo que se propone al anotar un gasto; siempre lo puedes cambiar.</p>
+          <Segmented
+            className="mt-2"
+            value={split}
+            onChange={setSplit}
+            options={[
+              { value: 'equal', label: 'Iguales' },
+              { value: 'percent', label: 'Porcentajes' },
+              { value: 'income', label: 'Según sueldos' },
+            ]}
+          />
+          {split === 'percent' && (
+            <ul className="mt-3 space-y-2 rounded-2xl bg-surface-2 p-3">
+              {group.members.map((m) => (
+                <li key={m.id} className="flex items-center gap-3">
+                  <MemberAvatar member={m} size={32} />
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{m.me ? 'Tú' : m.name}</span>
+                  <Input
+                    value={pcts[m.id] ?? ''}
+                    onChange={(e) => setPcts((p) => ({ ...p, [m.id]: e.target.value.replace(/[^\d]/g, '').slice(0, 3) }))}
+                    inputMode="numeric"
+                    placeholder="0"
+                    aria-label={`Porcentaje de ${m.me ? 'ti' : m.name}`}
+                    className="h-10 w-16 text-center"
+                  />
+                  <span className="text-sm text-muted">%</span>
+                </li>
+              ))}
+              <li className={cx('text-center text-xs font-semibold', weightsOk ? 'text-good' : 'text-warn')}>
+                {weightsOk ? '✓ Suman 100%' : `Suman ${weightSum}%: tienen que sumar 100%`}
+              </li>
+            </ul>
+          )}
+          {split === 'income' && (
+            <div className="mt-3 space-y-2 rounded-2xl bg-surface-2 p-3">
+              <p className="text-xs text-muted">
+                Cuánto gana cada uno al mes. Solo se guarda el % que resulta, no los sueldos. Ideal en pareja 💑
+              </p>
+              {group.members.map((m) => (
+                <div key={m.id} className="flex items-center gap-3">
+                  <MemberAvatar member={m} size={32} />
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{m.me ? 'Tú' : m.name}</span>
+                  <MiniAmountInput
+                    value={incomes[m.id] ?? ''}
+                    onChange={(v) => setIncomes((x) => ({ ...x, [m.id]: v }))}
+                    placeholder={formatAmountInput('0', locale, decimals)}
+                    label={`Sueldo de ${m.me ? 'ti' : m.name}`}
+                  />
+                </div>
+              ))}
+              {weights && (
+                <p className="text-center text-xs font-semibold text-good">
+                  Reparto: {weightsLabel({ members: group.members, weights })}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-line pt-4">
+          <p className="text-sm font-bold">🎯 Meta del grupo (opcional)</p>
+          <p className="text-xs text-muted">Para juntar plata entre todos: un viaje, un regalo, el pie del depto…</p>
+          <div className="mt-2 flex gap-2">
+            <Input
+              value={goalName}
+              onChange={(e) => setGoalName(e.target.value)}
+              placeholder="Ej: Viaje a Pucón"
+              maxLength={40}
+              aria-label="Nombre de la meta"
+              className="min-w-0 flex-1"
+            />
+            <MiniAmountInput value={goalAmount} onChange={setGoalAmount} label="Monto de la meta" placeholder={fmt(0)} />
+          </div>
+          {!goalOk && <p className="mt-1 text-xs text-warn">Ponle nombre y monto (o deja los dos vacíos).</p>}
+        </div>
+
         <div className="space-y-2 border-t border-line pt-4">
           <Button
             block
@@ -475,6 +678,7 @@ export default function GroupDetail() {
   const group = groups.find((g) => g.id === id)
   const [adding, setAdding] = useState(false)
   const [paying, setPaying] = useState<GroupTransfer | null>(null)
+  const [contributing, setContributing] = useState(false)
   const [settings, setSettings] = useState(false)
   const [newMember, setNewMember] = useState('')
   const { fmt, decimals } = useGroupMoney(group?.currency ?? 'CLP')
@@ -516,6 +720,7 @@ export default function GroupDetail() {
   const charge = (t: GroupTransfer) =>
     void shareText(groupChargeText({ name: memberName(group, t.from), amount: fmt(t.amount), group: label, link }))
   const spent = groupSpent(group)
+  const goal = goalProgress(group)
   const mine = myShareTotal(group)
   const guests = group.members.filter((m) => !m.joined)
 
@@ -556,6 +761,7 @@ export default function GroupDetail() {
               Gastaron {fmt(spent)} en total{mine > 0 ? ` · tu parte ${fmt(mine)}` : ''}
             </p>
           )}
+          {group.weights && <p className="mt-1 text-center text-xs font-semibold text-brand">Reparto: {weightsLabel(group)}</p>}
           <div className="mt-4 grid grid-cols-2 gap-2">
             <Button icon={<Plus className="size-5" />} onClick={() => setAdding(true)}>
               Gasto
@@ -570,6 +776,50 @@ export default function GroupDetail() {
             </p>
           )}
         </Card>
+
+        {group.goal ? (
+          <Card>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold tracking-wide text-muted uppercase">Meta del grupo</p>
+                <p className="truncate font-bold">🎯 {group.goal.name}</p>
+              </div>
+              <Button size="sm" icon={<Plus className="size-4" />} onClick={() => setContributing(true)}>
+                Aportar
+              </Button>
+            </div>
+            <ProgressBar ratio={goal.ratio} className="mt-3" color="var(--brand)" />
+            <p className="mt-2 text-sm">
+              <b>{fmt(goal.saved)}</b> de {fmt(goal.target)} ({Math.round(goal.ratio * 100)}%)
+              {goal.left > 0 ? ` · faltan ${fmt(goal.left)}` : ' · ¡lo lograron! 🎉'}
+            </p>
+            {goal.saved > 0 && (
+              <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                {group.members
+                  .filter((m) => goal.byMember[m.id])
+                  .map((m) => (
+                    <li key={m.id} className="text-xs text-muted">
+                      {m.me ? 'Tú' : m.name}: <b className="text-ink-2">{fmt(goal.byMember[m.id])}</b>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </Card>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setSettings(true)}
+            className="flex items-center gap-3 rounded-3xl border border-dashed border-line px-4 py-3 text-left text-sm"
+          >
+            <span className="text-xl" aria-hidden>
+              🎯
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">¿Juntan para algo?</span>
+              <span className="block text-xs text-muted">Crea una meta del grupo: un viaje, un regalo, el pie del depto.</span>
+            </span>
+          </button>
+        )}
 
         <Card>
           <p className="text-xs font-semibold tracking-wide text-muted uppercase">Para quedar a mano</p>
@@ -714,6 +964,7 @@ export default function GroupDetail() {
 
       {adding && <ExpenseSheet group={group} open={adding} onClose={() => setAdding(false)} />}
       <PaymentSheet group={group} transfer={paying} onClose={() => setPaying(null)} />
+      {contributing && <ContributionSheet group={group} open={contributing} onClose={() => setContributing(false)} />}
       {settings && <SettingsSheet group={group} open={settings} onClose={() => setSettings(false)} />}
     </div>
   )

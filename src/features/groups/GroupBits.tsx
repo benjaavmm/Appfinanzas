@@ -113,7 +113,20 @@ export const EntryItem = ({
   const me = group.members.find((m) => m.me)
   const payer = memberName(group, e.paidBy)
   const content =
-    e.kind === 'payment' ? (
+    e.kind === 'contribution' ? (
+      <>
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-lg" aria-hidden>
+          🎯
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold">
+            {payer === 'Tú' ? 'Aportaste' : `${payer} aportó`} a {group.goal?.name ?? 'la meta'}
+          </span>
+          <span className="block truncate text-xs text-muted">{fmtRelativeDay(e.date)}</span>
+        </span>
+        <span className="shrink-0 text-[15px] font-bold text-brand">{fmt(e.amount)}</span>
+      </>
+    ) : e.kind === 'payment' ? (
       <>
         <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-good-soft text-good" aria-hidden>
           <HandCoins className="size-5" />

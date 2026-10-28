@@ -17,7 +17,7 @@ export interface GroupMember {
 
 export interface GroupEntry {
   id: string
-  kind: 'expense' | 'payment'
+  kind: 'expense' | 'payment' | 'contribution'
   description?: string | null
   amount: number
   date: DateStr
@@ -37,12 +37,18 @@ export interface Group {
   members: GroupMember[]
   entries: GroupEntry[]
   updatedAt?: string
+  /** Reparto por defecto: % por integrante (suman 100). Sin esto, partes iguales */
+  weights?: Record<string, number>
+  /** Meta compartida (la "vaca"): los aportes no son deudas entre ellos */
+  goal?: { name: string; amount: number }
 }
 
 /** Saldo de cada integrante: positivo = le deben, negativo = debe */
 export const groupBalances = (group: Pick<Group, 'members' | 'entries'>, decimals = 0): Record<string, number> => {
   const minor: Record<string, number> = Object.fromEntries(group.members.map((m) => [m.id, 0]))
   for (const e of group.entries) {
+    // Los aportes a la meta no son deudas entre ellos
+    if (e.kind === 'contribution') continue
     if (e.paidBy in minor) minor[e.paidBy] += toMinor(e.amount, decimals)
     for (const [id, v] of Object.entries(e.shares)) if (id in minor) minor[id] -= toMinor(v, decimals)
   }
@@ -106,6 +112,50 @@ export const equalShares = (amount: number, memberIds: string[], payerId: string
     decimals,
   )
   return Object.fromEntries(shares.map((s) => [s.name, s.amount]))
+}
+
+/**
+ * Partes según los % del grupo entre los elegidos (si alguien no está, su % se reparte entre los
+ * demás en la misma proporción). El redondeo lo absorbe quien pagó, o el primero.
+ */
+export const weightedShares = (
+  amount: number,
+  memberIds: string[],
+  weights: Record<string, number>,
+  payerId: string,
+  decimals = 0,
+): Record<string, number> => {
+  const ids = memberIds.filter((id) => (weights[id] ?? 0) > 0)
+  if (!ids.length) return equalShares(amount, memberIds, payerId, decimals)
+  const total = toMinor(amount, decimals)
+  const sumW = ids.reduce((s, id) => s + weights[id], 0)
+  const minor = Object.fromEntries(ids.map((id) => [id, Math.floor((total * weights[id]) / sumW)]))
+  const left = total - Object.values(minor).reduce((a, b) => a + b, 0)
+  const sink = ids.includes(payerId) ? payerId : ids[0]
+  minor[sink] += left
+  return Object.fromEntries(Object.entries(minor).map(([id, v]) => [id, fromMinor(v, decimals)]))
+}
+
+/** "Tú 60% · Jazmín 40%" */
+export const weightsLabel = (group: Pick<Group, 'members' | 'weights'>) =>
+  group.weights
+    ? group.members
+        .filter((m) => (group.weights![m.id] ?? 0) > 0)
+        .map((m) => `${m.me ? 'Tú' : m.name} ${Math.round(group.weights![m.id])}%`)
+        .join(' · ')
+    : ''
+
+/** Cuánto llevan en la meta y cuánto puso cada uno */
+export const goalProgress = (group: Pick<Group, 'entries' | 'goal'>) => {
+  const byMember: Record<string, number> = {}
+  let saved = 0
+  for (const e of group.entries) {
+    if (e.kind !== 'contribution') continue
+    saved += e.amount
+    byMember[e.paidBy] = (byMember[e.paidBy] ?? 0) + e.amount
+  }
+  const target = group.goal?.amount ?? 0
+  return { saved, byMember, target, ratio: target > 0 ? Math.min(1, saved / target) : 0, left: Math.max(0, target - saved) }
 }
 
 /** Total gastado en el grupo (sin contar los pagos entre ellos) */

@@ -2,13 +2,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { LoaderCircle, LogIn, UserPlus } from 'lucide-react'
-import { Button, Card, Chip, EmptyState, PageHeader } from '../components/ui'
+import { Button, Card, Chip, EmptyState, PageHeader, ProgressBar } from '../components/ui'
 import { cloudConfigured } from '../lib/cloud/client'
 import { useAuth } from '../lib/cloud/auth'
 import { fetchPublicGroup, groupError, joinGroup, PENDING_JOIN_KEY, type PublicGroup } from '../lib/cloud/groups'
 import { vibrate } from '../lib/hooks'
 import { toast } from '../lib/ui'
-import { groupSpent, settleGroup } from '../features/groups/balance'
+import { goalProgress, groupSpent, settleGroup } from '../features/groups/balance'
 import { EntryItem, TransferRow, useGroupMoney } from '../features/groups/GroupBits'
 
 /** `standalone`: la persona todavía no usa la app (se ve sin la bienvenida) */
@@ -93,6 +93,7 @@ export default function GroupJoin({ standalone = false }: { standalone?: boolean
     }
   }
   const spent = groupSpent(group)
+  const goal = goalProgress(group)
 
   return (
     <div>
@@ -156,6 +157,17 @@ export default function GroupJoin({ standalone = false }: { standalone?: boolean
             </div>
           )}
         </Card>
+
+        {group.goal && (
+          <Card>
+            <p className="text-xs font-semibold tracking-wide text-muted uppercase">Meta del grupo</p>
+            <p className="font-bold">🎯 {group.goal.name}</p>
+            <ProgressBar ratio={goal.ratio} className="mt-3" color="var(--brand)" />
+            <p className="mt-2 text-sm">
+              <b>{fmt(goal.saved)}</b> de {fmt(goal.target)} ({Math.round(goal.ratio * 100)}%)
+            </p>
+          </Card>
+        )}
 
         <Card>
           <p className="text-xs font-semibold tracking-wide text-muted uppercase">Para quedar a mano</p>
