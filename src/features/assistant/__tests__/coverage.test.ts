@@ -25,7 +25,7 @@ describe(`entiende ${REAL_QUESTIONS.length} preguntas reales`, () => {
   for (const q of REAL_QUESTIONS)
     it(q, () => {
       const r = ask(q)
-      if (OFF_TOPIC_QUESTIONS.includes(q)) expect(r.kind).toBe('unknown')
+      if (OFF_TOPIC_QUESTIONS.includes(q)) expect(r.kind).toBe('offTopic')
       else expect(r.kind, r.text).not.toBe('unknown')
       expect(r.text.trim().length).toBeGreaterThan(3)
       expect(allText(r)).not.toMatch(/undefined|NaN|null|Infinity|\[object|\$-|comprarte (ir|viajar|pagar)/)

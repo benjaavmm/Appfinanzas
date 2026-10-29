@@ -822,5 +822,38 @@ grant execute on function public.group_set_rules(uuid, jsonb, text, numeric) to 
 grant execute on function public.group_public(text) to anon, authenticated;
 grant execute on function public.group_join(text, uuid, text) to authenticated;
 
+-- ═══════════════════════ Asistente con IA (Gemini) ═══════════════════════
+-- Cuántas preguntas le hizo cada persona a la IA hoy (hora de Chile), para que nadie agote la
+-- cuota gratis de todos. Solo la función "asistente-ia" (con la clave de servidor) la toca: la app
+-- no puede leerla ni cambiarla. No se guardan las preguntas, solo el conteo.
+create table if not exists public.ai_usage (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  day date not null,
+  count int not null default 0,
+  primary key (user_id, day)
+);
+alter table public.ai_usage enable row level security;
+
+create or replace function public.ai_use(p_user uuid)
+returns int
+language sql
+security definer
+set search_path = public
+as $$
+  -- Se limpian los días viejos de paso
+  with old as (delete from public.ai_usage where day < (now() at time zone 'America/Santiago')::date - 7)
+  insert into public.ai_usage (user_id, day, count)
+  values (p_user, (now() at time zone 'America/Santiago')::date, 1)
+  on conflict (user_id, day) do update set count = public.ai_usage.count + 1
+  returning count;
+$$;
+
+revoke all on function public.ai_use(uuid) from public, anon, authenticated;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function public.ai_use(uuid) to service_role;
+  end if;
+end $$;
+
 -- Para que la API vea las funciones nuevas al tiro
 notify pgrst, 'reload schema';

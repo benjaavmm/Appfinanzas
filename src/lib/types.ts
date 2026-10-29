@@ -205,6 +205,8 @@ export interface Settings {
     aliases?: Record<string, AssistantAlias>
     /** Día del mes en que te pagan el sueldo */
     payday?: number
+    /** Lo que el asistente no entiende se lo pregunta a la IA (Gemini), con un resumen de tus números */
+    ai?: boolean
   }
 }
 

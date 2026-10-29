@@ -410,7 +410,7 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     title: 'Sin internet',
     answer:
-      'Sí: todo lo que anotas se guarda en tu teléfono y la app funciona **sin internet**, incluido yo (respondo sin conectarme a nada). Lo que sí necesita señal es sincronizar con tu cuenta, los amigos, los grupos y el automático con Gmail: se ponen al día solos cuando vuelves a tener internet.',
+      'Sí: todo lo que anotas se guarda en tu teléfono y la app funciona **sin internet**, incluido yo (respondo sin conectarme a nada). Lo que sí necesita señal es sincronizar con tu cuenta, los amigos, los grupos y el automático con Gmail: se ponen al día solos cuando vuelves a tener internet. Si activas las **respuestas con IA de Google**, las preguntas que yo no sé sí usan internet.',
     related: ['¿Dónde se guardan mis datos?', '¿Cómo respaldo en la nube?'],
   },
   {
@@ -517,7 +517,7 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     title: 'Sobre la app',
     answer:
-      'Es una app **chilena**, hecha para ordenar tus lucas sin publicidad ni letra chica. Yo soy el asistente: vivo dentro de la app y te respondo sin conectarme a internet, así que tus datos no salen de tu teléfono.',
+      'Es una app **chilena**, hecha para ordenar tus lucas sin publicidad ni letra chica. Yo soy el asistente: vivo dentro de la app y te respondo sin conectarme a internet, así que tus datos no salen de tu teléfono. Si quieres, puedo apoyarme en la IA de Google (Gemini) para lo que no sé: se activa en la carita de arriba del asistente.',
     related: ['¿La app es gratis?', '¿Mis datos están seguros?'],
   },
   {
@@ -555,6 +555,25 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
       'Por ahora la app no tiene foto de perfil: te muestra con tu **nombre**. Lo cambias en **Ajustes → Perfil → Tu nombre**.',
     action: { label: 'Ir a Ajustes', kind: 'nav', to: '/ajustes' },
     related: ['¿Cómo cambio mi nombre?'],
+  },
+  {
+    id: 'respuestas-con-ia',
+    kind: 'app',
+    triggers: [
+      'gemini',
+      'respuestas con ia',
+      'activar la ia',
+      'usar la ia',
+      'inteligencia artificial',
+      'conectarte a una ia',
+      'preguntarle a la ia',
+      'apagar la ia',
+    ],
+    title: 'Respuestas con IA de Google',
+    answer:
+      'Yo respondo casi todo sin internet. Si activas las **respuestas con IA de Google**, lo que no sé se lo pregunto a **Gemini** con un resumen de tus números (totales por categoría, tarjetas, metas y suscripciones; sin nombres de personas, lugares ni notas). Necesitas tener sesión iniciada y hay un límite de preguntas al día. Lo apagas cuando quieras.',
+    steps: ['Toca la **carita** arriba a la derecha en esta pantalla.', 'Enciende **Respuestas con IA de Google**.'],
+    related: ['¿Mis datos están seguros?', '¿Qué puedes hacer?'],
   },
   {
     id: 'dividir-cuenta',
@@ -1384,7 +1403,7 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     title: 'Lo que puede hacer el asistente',
     answer:
-      'Respondo con **tus datos**: cuánto gastaste en algo o en un lugar, cómo vas este mes, en qué gastas más, quién te debe, tus suscripciones, tarjetas, presupuestos, metas y los pagos que se vienen. También hago cuentas (porcentajes, cuotas, créditos con interés), te armo un presupuesto o un plan de ahorro, te digo qué recortar y qué hacer con el sueldo, anoto gastos si me escribes "gasté 5 lucas en uber" y te explico cómo usar la app y conceptos de finanzas. Funciono **sin internet** y nada sale de tu teléfono.',
+      'Respondo con **tus datos**: cuánto gastaste en algo o en un lugar, cómo vas este mes, en qué gastas más, quién te debe, tus suscripciones, tarjetas, presupuestos, metas y los pagos que se vienen. También hago cuentas (porcentajes, cuotas, créditos con interés), te armo un presupuesto o un plan de ahorro, te digo qué recortar y qué hacer con el sueldo, anoto gastos si me escribes "gasté 5 lucas en uber" y te explico cómo usar la app y conceptos de finanzas. Funciono **sin internet** y nada sale de tu teléfono. Si activas las **respuestas con IA de Google**, lo que yo no sé se lo pregunto a Gemini con un resumen de tus números (sin nombres de personas ni lugares).',
     related: ['¿Cómo te cambio la personalidad?', '¿Cómo anoto rápido escribiendo?'],
   },
   {
@@ -1451,7 +1470,7 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     title: 'Dónde quedan tus datos',
     answer:
-      'Tus datos se guardan **en este dispositivo**. Si inicias sesión en **Mi cuenta**, además se respaldan en tu cuenta en la nube para que no los pierdas, pero las **fotos de boletas** y el **PIN** quedan solo en el teléfono. Las boletas, las cartolas que importas y este asistente se procesan en tu teléfono, sin enviar nada a ningún lado.',
+      'Tus datos se guardan **en este dispositivo**. Si inicias sesión en **Mi cuenta**, además se respaldan en tu cuenta en la nube para que no los pierdas, pero las **fotos de boletas** y el **PIN** quedan solo en el teléfono. Las boletas, las cartolas que importas y este asistente se procesan en tu teléfono, sin enviar nada a ningún lado. Solo si activas las **respuestas con IA de Google** en el asistente, las preguntas que él no sabe van a Gemini con un resumen de tus números.',
     related: ['¿Cómo respaldo en la nube?', '¿Cómo pongo un PIN?'],
   },
 ]

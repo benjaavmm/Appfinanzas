@@ -853,7 +853,7 @@ const normal = (data: FinanceData, today: DateStr): Normal => {
 }
 
 /** Promedio mensual de cada categoría de gasto en los últimos 3 meses con movimientos */
-const categoryAverages = (data: FinanceData, today: DateStr) => {
+export const categoryAverages = (data: FinanceData, today: DateStr) => {
   const ref = parseDate(today)
   const months = [1, 2, 3]
     .map((n) => shiftMonth(ref, -n))

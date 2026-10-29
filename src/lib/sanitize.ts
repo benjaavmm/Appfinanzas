@@ -300,6 +300,7 @@ export const sanitizeData = (r: Record<string, unknown>, version: number): Sanit
             personality: str(ai.personality),
             aliases: aliases(ai.aliases),
             payday: intIn(ai.payday, 1, 31),
+            ai: bool(ai.ai),
           })
         : undefined,
       bankLinks: links

@@ -2031,7 +2031,7 @@ export const answer = (
     return done({
       text: 'Jaja, de eso no sé mucho 😅: lo mío son tus finanzas y la app. ¿Vemos cómo vas?',
       suggestions: STARTER_SUGGESTIONS.slice(0, 3),
-      kind: 'unknown',
+      kind: 'offTopic',
     })
   if (/^(estoy aburrid[oa]|que aburrido|que aburrida|me aburro|aburrido|aburrida)$/.test(q))
     return done({
@@ -2377,7 +2377,7 @@ export const answer = (
           return {
             text: 'De eso no sé mucho 😅: lo mío son tus finanzas y la app. Pregúntame, por ejemplo:',
             suggestions: STARTER_SUGGESTIONS.slice(0, 4),
-            kind: 'unknown',
+            kind: 'offTopic',
           }
         // "¿Qué es el finiquito?" y no lo sé: se dice, con lo que sí sé
         const concept = q.match(/^(?:que es|que son|que significa|que quiere decir)\s+(?:el |la |los |las |un |una )?(.{3,40})$/)

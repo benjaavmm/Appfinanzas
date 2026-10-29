@@ -14,7 +14,12 @@ export interface ReplyRow {
   sub?: string
 }
 
-export type ReplyAction = { label: string } & ({ kind: 'sheet'; sheet: SheetState } | { kind: 'nav'; to: string })
+export type ReplyAction = { label: string } & (
+  | { kind: 'sheet'; sheet: SheetState }
+  | { kind: 'nav'; to: string }
+  /** Le pasa la pregunta a la IA (Gemini) */
+  | { kind: 'askAi'; question: string }
+)
 
 /** Cómo viene la noticia: la personalidad reacciona distinto */
 export type Mood = 'good' | 'bad' | 'neutral'
@@ -37,6 +42,8 @@ export interface Reply {
   suggestions?: string[]
   /** Algo que el asistente aprendió y la app debe guardar */
   learn?: LearnEffect
+  /** Respondió la IA (Gemini): cuántas preguntas le quedan hoy */
+  ai?: { left?: number }
 }
 
 /** Lo que el asistente aprende de ti (la app lo guarda en tus ajustes) */
