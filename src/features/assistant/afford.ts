@@ -205,7 +205,10 @@ export const affordReply = (
   // "unas zapatillas", "un celular"; "esto"/"eso" no aporta
   const item = /^(esto|eso|esa|ese|algo|aquello)$/.test(what.trim()) ? '' : what.trim()
   // "viajar a Brasil", "ir a un concierto", "pagar el arriendo": se hace, no se compra
-  const doing = /^(ir|irme|viajar|salir|arrendar|pagar|tomar|hacer|invitar|darme|comer|celebrar|cambiarme|estudiar)\b/.test(item)
+  const doing =
+    /^(ir|irme|viajar|salir|arrendar|pagar|tomar|hacer|invitar|darme|comer|celebrar|cambiarme|estudiar|regalar|regalarle)\b/.test(
+      item,
+    )
   const youCan = doing ? `puedes ${item}` : `puedes comprarte ${item}`
   const m = a.monthly
   const best = a.card?.asked ?? a.card?.options.find((o) => o.fits) ?? a.card?.options[0]

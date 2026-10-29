@@ -195,6 +195,9 @@ export const FINANCE_KNOWLEDGE: KnowledgeEntry[] = [
     id: 'comision-mantencion',
     kind: 'concept',
     triggers: [
+      'comision',
+      'que es la comision',
+      'comisiones del banco',
       'comision de mantencion',
       'costo de mantencion',
       'cobro de mantencion',
@@ -547,6 +550,9 @@ export const FINANCE_KNOWLEDGE: KnowledgeEntry[] = [
     id: 'afp',
     kind: 'concept',
     triggers: [
+      'cuenta 2',
+      'cuenta dos',
+      'retiro de fondos',
       'fondo a',
       'fondo e',
       'fondo a o e',
@@ -572,6 +578,8 @@ export const FINANCE_KNOWLEDGE: KnowledgeEntry[] = [
     id: 'apv',
     kind: 'concept',
     triggers: [
+      'ahorro voluntario',
+      'ahorro previsional voluntario',
       'apv',
       'que es el apv',
       'ahorro previsional voluntario',
@@ -757,6 +765,9 @@ export const FINANCE_KNOWLEDGE: KnowledgeEntry[] = [
     id: 'operacion-renta',
     kind: 'concept',
     triggers: [
+      'mis impuestos',
+      'pagar impuestos',
+      'impuestos',
       'operacion renta',
       'que es la operacion renta',
       'declaracion de renta',
@@ -936,5 +947,31 @@ export const FINANCE_KNOWLEDGE: KnowledgeEntry[] = [
     answer:
       'El **aguinaldo** es un bono que algunas empresas pagan en **Fiestas Patrias** o **Navidad**. En el sector privado no es obligatorio, salvo que esté en tu contrato o en un acuerdo con la empresa. Si te llega, es plata extra perfecta para **pagar deudas caras o ahorrar**: pregúntame "¿qué hago con el aguinaldo?".',
     related: ['¿Qué es la gratificación?', '¿Qué hago con el aguinaldo?'],
+  },
+  {
+    id: 'beneficios-tarjeta',
+    kind: 'concept',
+    triggers: ['cashback', 'que es el cashback', 'puntos de la tarjeta', 'millas', 'acumular puntos', 'canjear puntos'],
+    title: 'Puntos, millas y cashback',
+    answer:
+      'Son **premios por usar la tarjeta**: los puntos o millas se canjean por productos o pasajes, y el **cashback** te devuelve un porcentaje de lo que compras. Valen la pena solo si **pagas el total facturado** cada mes: si pagas intereses, te cuestan mucho más de lo que te dan. Y nunca compres algo solo para acumular puntos.',
+    related: ['¿Qué es el pago mínimo?', '¿Qué es el CAE?'],
+  },
+  {
+    id: 'renegociacion-deudas',
+    kind: 'concept',
+    triggers: [
+      'ley de quiebras',
+      'quiebra personal',
+      'declararme en quiebra',
+      'renegociacion de deudas',
+      'superir',
+      'insolvencia',
+      'reemprendimiento',
+    ],
+    title: 'Renegociación y "quiebra" de personas',
+    answer:
+      'Si tienes **varias deudas atrasadas** que ya no puedes pagar, en Chile existe un procedimiento de **renegociación** para personas en la **Superintendencia de Insolvencia y Reemprendimiento (Superir)**: es gratis y te ayuda a llegar a un acuerdo con todos tus acreedores a la vez. Si eso no resulta, existe la **liquidación** (la "quiebra"). Antes de llegar ahí, conversa con cada banco para **repactar**. Los requisitos están en **superir.gob.cl**.',
+    related: ['¿Qué significa repactar?', '¿Qué es DICOM?'],
   },
 ]

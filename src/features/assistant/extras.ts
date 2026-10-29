@@ -80,7 +80,7 @@ export const readExtraIntent = (q: string): ExtraIntent | undefined => {
       'termino de pagar todo',
       'avalancha',
       'bola de nieve',
-      'endeudad',
+      'endeud',
     )
   )
     return 'debtPlan'
@@ -88,6 +88,8 @@ export const readExtraIntent = (q: string): ExtraIntent | undefined => {
     has(
       q,
       'yo del futuro',
+      'libre de cuotas',
+      'sin cuotas',
       'comprometid',
       'proximos meses',
       'meses que vienen',
@@ -139,7 +141,18 @@ export const futureReply = (data: FinanceData, today: DateStr, fmt: Fmt, q: stri
   const why = `Sumo, mes a mes, lo que ya está comprometido: las cuotas y compras de tus tarjetas en el mes en que vence su estado de cuenta, tus suscripciones en su fecha de cobro y las deudas con fecha. El % es contra lo que te entra en un mes normal${f.income ? ` (${fmt(f.income)}, promedio de tus últimos meses)` : ''}.`
 
   // "¿cuándo termino de pagar las cuotas?"
-  if (has(q, 'termino de pagar', 'dejo de pagar', 'se me acaban', 'termino las cuotas', 'terminan las cuotas')) {
+  if (
+    has(
+      q,
+      'termino de pagar',
+      'dejo de pagar',
+      'se me acaban',
+      'termino las cuotas',
+      'terminan las cuotas',
+      'libre de cuotas',
+      'sin cuotas',
+    )
+  ) {
     if (!f.plans.length) return { text: 'No tienes compras en cuotas pendientes 🙌.', kind: 'future', mood: 'good', rows, why }
     const last = f.plans.reduce((a, b) => (b.lastKey > a.lastKey ? b : a))
     return {

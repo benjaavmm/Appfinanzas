@@ -417,6 +417,10 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     id: 'pantallas-de-la-app',
     kind: 'app',
     triggers: [
+      'ver la guia',
+      'tutorial',
+      'como se usa la app',
+      'como uso la app',
       'donde veo mis gastos',
       'donde estan mis gastos',
       'donde veo mis movimientos',
@@ -534,6 +538,25 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     related: ['¿Dónde se guardan mis datos?', '¿Cómo pongo un PIN?'],
   },
   {
+    id: 'compartir-app',
+    kind: 'app',
+    triggers: ['comparto la app', 'compartir la app', 'recomendar la app', 'pasarle la app', 'invitar a alguien a la app'],
+    title: 'Compartir la app',
+    answer:
+      'Mándale el **link de la app** (el que abres en el navegador) por WhatsApp: desde ahí la abre y la instala gratis, sin tienda de apps. Si quieren dividir gastos contigo, mejor invítalos a un **grupo**: les llega un link y ven todo sin instalar nada.',
+    related: ['¿Cómo instalo la app?', '¿Cómo creo un grupo?'],
+  },
+  {
+    id: 'foto-perfil',
+    kind: 'app',
+    triggers: ['cambio mi foto', 'cambiar mi foto', 'foto de perfil', 'poner una foto', 'mi avatar'],
+    title: 'Foto de perfil',
+    answer:
+      'Por ahora la app no tiene foto de perfil: te muestra con tu **nombre**. Lo cambias en **Ajustes → Perfil → Tu nombre**.',
+    action: { label: 'Ir a Ajustes', kind: 'nav', to: '/ajustes' },
+    related: ['¿Cómo cambio mi nombre?'],
+  },
+  {
     id: 'dividir-cuenta',
     kind: 'app',
     triggers: [
@@ -595,6 +618,10 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     id: 'abonar-saldar-prestamo',
     kind: 'app',
     triggers: [
+      'agrego un abono',
+      'abono a un prestamo',
+      'registrar un abono',
+      'marco un prestamo como pagado',
       'registrar un abono',
       'registro un abono',
       'abonar a un prestamo',
@@ -884,6 +911,10 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     id: 'categorias',
     kind: 'app',
     triggers: [
+      'color de una categoria',
+      'cambio el color',
+      'icono de una categoria',
+      'cambiar el icono',
       'crear una categoria',
       'creo una categoria',
       'nueva categoria',
@@ -1156,6 +1187,11 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     id: 'instalar-app',
     kind: 'app',
     triggers: [
+      'funciona en iphone',
+      'en iphone',
+      'funciona en android',
+      'sirve para iphone',
+      'en mi celular',
       'instalar la app',
       'instalo la app',
       'descargar la app',
@@ -1348,7 +1384,7 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     title: 'Lo que puede hacer el asistente',
     answer:
-      'Respondo con **tus datos**: cuánto gastaste en algo o en un lugar, cómo vas este mes, en qué gastas más, quién te debe, tus suscripciones, tarjetas, presupuestos, metas y los pagos que se vienen. También anoto gastos si me escribes "gasté 5 lucas en uber" y te explico cómo usar la app. Funciono **sin internet** y nada sale de tu teléfono.',
+      'Respondo con **tus datos**: cuánto gastaste en algo o en un lugar, cómo vas este mes, en qué gastas más, quién te debe, tus suscripciones, tarjetas, presupuestos, metas y los pagos que se vienen. También hago cuentas (porcentajes, cuotas, créditos con interés), te armo un presupuesto o un plan de ahorro, te digo qué recortar y qué hacer con el sueldo, anoto gastos si me escribes "gasté 5 lucas en uber" y te explico cómo usar la app y conceptos de finanzas. Funciono **sin internet** y nada sale de tu teléfono.',
     related: ['¿Cómo te cambio la personalidad?', '¿Cómo anoto rápido escribiendo?'],
   },
   {

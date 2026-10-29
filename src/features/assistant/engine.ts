@@ -166,6 +166,7 @@ type Intent =
   | 'topPlaces'
   | 'openForm'
   | 'topDay'
+  | 'months'
   | SmartIntent
 
 export const STARTER_SUGGESTIONS = [
@@ -482,7 +483,7 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
   const smart = readSmartIntent(q, hasAmount)
   if (smart) return smart
   if (
-    /^(ayuda|help|me ayudas|ayudame|no te entiendo|no entiendo)\b/.test(q) ||
+    /^(ayuda|help|me ayudas|ayudame|no te entiendo|no entiendo)( (por favor|con algo|un poco|en algo))?$/.test(q) ||
     has(q, 'que puedes', 'que sabes hacer', 'que haces', 'en que me ayudas', 'que te puedo preguntar')
   )
     return 'help'
@@ -496,6 +497,10 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
       'me puedo comprar',
       'podre comprar',
       'podre pagar',
+      'puedo regalar',
+      'puedo regalarle',
+      'tengo para pagar',
+      'tengo para comprar',
       'me compro',
       'puedo darme el gusto',
       'me puedo dar el gusto',
@@ -532,6 +537,20 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
   const extra = readExtraIntent(q)
   if (extra) return extra
   if (/\bsi (ahorro|ahorrara|junto|guardo|aparto|me sobran|me sobra|pongo)\b/.test(q)) return 'savePlan'
+  if (
+    has(
+      q,
+      'mejor mes',
+      'peor mes',
+      'mes gaste mas',
+      'mes gaste menos',
+      'mes que mas gaste',
+      'mes que menos gaste',
+      'mes ahorre mas',
+    )
+  )
+    return 'months'
+  if (has(q, 'fines de semana', 'los fines de semana')) return 'weekday'
   if (has(q, 'dia que mas gaste', 'dia que mas gasto', 'dia en que mas gaste', 'dia mas caro', 'dia que gaste mas'))
     return 'topDay'
   if (has(q, 'cuantas veces', 'cuantos pedidos', 'cuantas compras', 'con que frecuencia', 'cada cuanto')) return 'count'
@@ -621,8 +640,22 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
     )
   )
     return 'tips'
-  if (has(q, 'compar', ' vs ', 'versus', 'mas que el', 'menos que el', 'diferencia')) return 'compare'
-  if (has(q, 'mas grande', 'mas caro', 'mayor gasto', 'gastos grandes', 'compra mas', 'gasto mas alto')) return 'biggest'
+  if ((has(q, 'compar') && !has(q, 'compart')) || has(q, ' vs ', 'versus', 'mas que el', 'menos que el', 'diferencia'))
+    return 'compare'
+  if (
+    has(
+      q,
+      'mas grande',
+      'mas caro',
+      'mayor gasto',
+      'gastos grandes',
+      'compra mas',
+      'gasto mas alto',
+      'gasto mas chico',
+      'menor gasto',
+    )
+  )
+    return 'biggest'
   if (
     has(
       q,
@@ -747,8 +780,10 @@ export const readIntent = (q: string, hasAmount: boolean): Intent | undefined =>
 /** "¿puedo comprarme unas zapatillas de 60 lucas?" → "unas zapatillas" */
 export const extractItem = (q: string) => {
   const m =
-    q.match(/\b(?:alcanza para|comprarme|comprar|compro|darme el gusto de|dar el gusto de|gastarme|gastar|pagar)\s+(.+)$/) ??
-    q.match(/\b(?:puedo|me puedo|podria)\s+((?:ir|irme|viajar|salir|arrendar|tomar|hacer|invitar|celebrar)\b.+)$/)
+    q.match(/\b(?:alcanza para|comprarme|comprar|compro|darme el gusto de|dar el gusto de|gastarme|gastar)\s+(.+)$/) ??
+    q.match(
+      /\b(?:puedo|me puedo|podria|tengo para|podre)\s+((?:ir|irme|viajar|salir|arrendar|tomar|hacer|invitar|celebrar|pagar|regalar|regalarle)\b.+)$/,
+    )
   if (!m) return ''
   const item = m[1]
     .replace(/^en \d+ cuotas?\s+/, '')
@@ -1351,12 +1386,13 @@ const averageReply = (data: FinanceData, s: Subject, p: Period, fmt: Fmt): Reply
   }
 }
 
-const biggestReply = (data: FinanceData, s: Subject, p: Period, fmt: Fmt): Reply => {
+const biggestReply = (data: FinanceData, s: Subject, p: Period, fmt: Fmt, q = ''): Reply => {
   const txs = inRange(data.transactions, p.from, p.to).filter((t) => t.type === 'expense' && matchTx(t, s))
   if (!txs.length) return { text: `No tienes gastos ${p.label}.` }
-  const top = [...txs].sort((a, b) => b.amount - a.amount).slice(0, 5)
+  const small = has(q, 'mas chico', 'mas barato', 'menor gasto', 'mas pequeno')
+  const top = [...txs].sort((a, b) => (small ? a.amount - b.amount : b.amount - a.amount)).slice(0, 5)
   return {
-    text: `Tu gasto más grande ${p.label} fue **${fmt(top[0].amount)}**${top[0].place ? ` en ${top[0].place}` : ''} el ${fmtDate(top[0].date)}.`,
+    text: `Tu gasto más ${small ? 'chico' : 'grande'} ${p.label} fue **${fmt(top[0].amount)}**${top[0].place ? ` en ${top[0].place}` : ''} el ${fmtDate(top[0].date)}.`,
     txs: top,
   }
 }
@@ -1780,7 +1816,7 @@ export const welcome = (data: FinanceData, today: DateStr, fmt: Fmt, prefs: Assi
 }
 
 const CAPABILITIES =
-  'Te respondo con los datos de tu app: cuánto gastaste y en qué, cómo vas este mes, quién te debe, tu tarjeta y sus cuotas, si te alcanza para algo (con el interés de las cuotas), **cuánto tienes comprometido en los próximos meses**, **cómo salir de tus deudas**, tus **garantías**, tus **grupos** y **tu mes en lucas**. También te explico cómo usar la app y conceptos como el **CAE** o el **cupo**. Si me dices **"gasté 5 lucas en uber"**, lo anoto. Y aprendo de ti: dime **"cuando digo la micro me refiero a transporte"**.'
+  'Te respondo con los datos de tu app: cuánto gastaste y en qué, cómo vas este mes, quién te debe, tu tarjeta y sus cuotas, si te alcanza para algo (con el interés de las cuotas), **cuánto tienes comprometido en los próximos meses**, **cómo salir de tus deudas**, tus **garantías**, tus **grupos** y **tu mes en lucas**. También **hago cuentas** ("¿cuánto es el 15% de 80 lucas?", "si pido 1 millón al 2% en 24 cuotas"), te digo **cuándo te pagan**, te armo un **presupuesto** o un **plan de ahorro** y te digo **qué recortar**. Te explico cómo usar la app y conceptos como el **CAE** o la **UF**. Si me dices **"gasté 5 lucas en uber"**, lo anoto. Y aprendo de ti: dime **"cuando digo la micro me refiero a transporte"**.'
 
 const SMALLTALK_FALLBACK: Partial<Record<Moment, string>> = {
   thanks: '¡De nada! 😊',
@@ -1914,9 +1950,21 @@ export const answer = (
     })
   }
 
+  // "¿Eres mujer u hombre?", "¿qué edad tienes?"
+  if (
+    /\b(eres (mujer|hombre|nino|nina|chico|chica)|que edad tienes|cuantos anos tienes|donde vives|tienes (novia|novio|pareja))\b/.test(
+      q,
+    )
+  )
+    return done({
+      text: `Soy ${prefs.botName || DEFAULT_BOT_NAME}, un asistente que vive en tu app: no tengo edad ni género 😄, pero sí harto conocimiento de lucas. ¿En qué te ayudo?`,
+      suggestions: STARTER_SUGGESTIONS.slice(0, 3),
+      kind: 'smalltalk:about',
+    })
+
   // "no me sirvió", "no era eso"
   if (
-    /^(no me sirvio|no sirve|no me ayudo|no me ayudaste|no era eso|no es eso|eso no|no entendiste|me entendiste mal|no es lo que pregunte|no es lo que te pregunte|mal|incorrecto|estas mal)$/.test(
+    /^(no me sirvio|no sirve|no me ayudo|no me ayudaste|no era eso|no es eso|eso no|no entendiste|me entendiste mal|no es lo que pregunte|no es lo que te pregunte|mal|incorrecto|estas mal|te equivocaste|estas equivocado|estas equivocada|eso esta mal|esta mal)$/.test(
       q,
     )
   )
@@ -2044,6 +2092,10 @@ export const answer = (
   // Si preguntas por una cuenta, un lugar o una persona tuya, van tus datos ("¿cuánto tengo en la cuenta RUT?")
   const dataSubject = !!(subject.accountId || subject.place || subject.person || subject.subscription || subject.goal)
   if (!intent && subject.accountId && !howTo) intent = 'balance'
+  if (subject.person && (!intent || intent === 'spent')) {
+    const loan = data.loans.find((l) => normalizeText(l.person) === normalizeText(subject.person!))
+    intent = loan?.direction === 'borrowed' ? 'iOwe' : 'owedToMe'
+  }
   // "tips para ahorrar en el súper", "cómo gasto menos en uber": qué recortar ahí
   if (intent === 'tips' && (subject.category || subject.place)) intent = 'cutBack'
   if (
@@ -2154,8 +2206,18 @@ export const answer = (
         return antsReply(data, today, fmt)
       case 'installments':
         return installmentsReply(data, today, fmt)
-      case 'subDetail':
+      case 'subDetail': {
+        const named = data.subscriptions.filter((x) => x.active && wordIn(q, fold(x.name).replace(/ñ/g, 'n')))
+        if (named.length >= 2) {
+          const total = named.reduce((sum, x) => sum + monthlyEquivalent(x), 0)
+          return {
+            text: `Entre ${named.map((x) => x.name).join(' y ')} pagas **${fmt(Math.round(total))} al mes** (${fmt(Math.round(total * 12))} al año).`,
+            rows: named.map((x) => ({ icon: x.icon, label: x.name, value: `${fmt(Math.round(monthlyEquivalent(x)))}/mes` })),
+            kind: 'subDetail',
+          }
+        }
         return subject.subscription ? subDetailReply(data, subject.subscription, today, fmt, q) : subsReply(data, today, fmt, q)
+      }
       case 'monthlyAvg':
         return monthlyAvgReply(data, subject, today, fmt)
       case 'future':
@@ -2170,6 +2232,32 @@ export const answer = (
         return wrappedReply(data, today, fmt, q)
       case 'topPlaces':
         return topPlacesReply(data, period, fmt)
+      case 'months': {
+        const ref = parseDate(today)
+        const list = [5, 4, 3, 2, 1, 0]
+          .map((n) => shiftMonth(ref, -n))
+          .map((m) => {
+            const end = monthEnd(m) > today ? today : monthEnd(m)
+            const txs = inRange(data.transactions, monthStart(m), end)
+            return { m, spent: sumType(txs, 'expense'), income: sumType(txs, 'income') }
+          })
+          .filter((x) => x.spent > 0)
+        if (list.length < 2) return { text: 'Necesito al menos dos meses anotados para compararlos.', kind: 'months' }
+        // El mes en curso no compite: todavía no termina
+        const full = list.slice(0, -1)
+        const most = [...full].sort((a, b) => b.spent - a.spent)[0]
+        const best = [...full].sort((a, b) => b.income - b.spent - (a.income - a.spent))[0]
+        return {
+          text: `De los últimos meses, en el que más gastaste fue **${fmtMonth(most.m)}** (${fmt(most.spent)}) y tu **mejor mes** fue **${fmtMonth(best.m)}**: te sobraron ${fmt(best.income - best.spent)}.`,
+          rows: list.map((x) => ({
+            label: fmtMonth(x.m),
+            value: fmt(x.spent),
+            sub: `Te entró ${fmt(x.income)}`,
+            tone: x === most ? ('bad' as const) : x === best ? ('good' as const) : undefined,
+          })),
+          kind: 'months',
+        }
+      }
       case 'topDay': {
         const byDay = new Map<string, { total: number; count: number }>()
         for (const t of inRange(data.transactions, period.from, period.to))
@@ -2250,7 +2338,7 @@ export const answer = (
       case 'compare':
         return compareReply(data, period, fmt)
       case 'biggest':
-        return biggestReply(data, subject, period, fmt)
+        return biggestReply(data, subject, period, fmt, q)
       case 'average':
         return averageReply(data, subject, period, fmt)
       case 'income':

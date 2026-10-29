@@ -271,6 +271,17 @@ export const calcReply = (question: string, data: FinanceData, today: DateStr, f
     }
   }
 
+  // Propina: "¿cuánto le pongo de propina a 32 mil?"
+  if (has(t, 'propina')) {
+    const base = nums.find((n) => n.unit || n.value >= 1000)
+    const p = Number(t.match(/(\d+(?:\.\d+)?)\s*(?:%|por ?ciento)/)?.[1] ?? 10)
+    if (base)
+      return {
+        text: `La propina del ${decimal(p)}% sobre ${money(base.value)} es **${money((base.value * p) / 100)}**: en total, ${money(base.value * (1 + p / 100))}.`,
+        kind: 'calc',
+      }
+  }
+
   // Créditos y cuotas con interés: "si pido 1 millón al 2% mensual en 24 cuotas"
   const rateM = t.match(/(\d+(?:\.\d+)?)\s*(?:%|por ?ciento)\s*(mensual(?:es)?|al mes|anual(?:es)?|al ano)?/)
   const nM = t.match(/(\d{1,3})\s*(?:cuotas|meses)\b/)
@@ -283,6 +294,8 @@ export const calcReply = (question: string, data: FinanceData, today: DateStr, f
   }
 
   // "¿Cuánto es la cuota de 300 lucas en 12 cuotas?" (sin interés)
+  // "un celular de 600 en 10 cuotas": 600 son lucas
+  const loose = nums.find((n) => !n.unit && n.value >= 10 && n.value < 10000 && n.index !== nM?.index)
   if (
     nM &&
     !rateM &&
@@ -298,7 +311,9 @@ export const calcReply = (question: string, data: FinanceData, today: DateStr, f
       'cada cuota',
     )
   ) {
-    const amount = nums.find((n) => n.index !== nM.index && (n.unit || n.value >= 1000))
+    const amount =
+      nums.find((n) => n.index !== nM.index && (n.unit || n.value >= 1000)) ??
+      (loose ? { ...loose, value: loose.value * 1000 } : undefined)
     const n = Number(nM[1])
     // "3 cuotas de 20 lucas" es el valor de cada cuota; "300 lucas en 12 cuotas" es el total
     if (amount && n > 0 && new RegExp(`${n}\\s*cuotas?\\s+de\\s+`).test(t) && amount.index > nM.index!)
@@ -532,7 +547,20 @@ export const readSmartIntent = (q: string, hasAmount: boolean): SmartIntent | un
   // "¿En qué gasto menos?" pregunta por tus datos, no qué recortar
   if (/\b(en que|donde|cual)\b.*\bgasto menos\b/.test(q)) return undefined
   if (
-    has(q, 'aguinaldo', 'gratificacion', 'bono', 'devolucion de impuestos', 'plata extra', 'finiquito', 'herencia') &&
+    has(
+      q,
+      'aguinaldo',
+      'gratificacion',
+      'bono',
+      'devolucion de impuestos',
+      'plata extra',
+      'finiquito',
+      'herencia',
+      'me sobraron',
+      'me sobro',
+      'ahorradas',
+      'ahorrados',
+    ) &&
     has(q, 'que hago', 'en que', 'como uso', 'como aprovecho', 'que me recomiendas', 'conviene', 'deberia', 'invierto', 'gasto')
   )
     return 'windfall'
@@ -649,6 +677,11 @@ export const readSmartIntent = (q: string, hasAmount: boolean): SmartIntent | un
       'cuando junto',
       'cuando llego a',
       'cuando tendre',
+      'cuanto ahorrar para',
+      'ahorrar para un',
+      'ahorrar para una',
+      'juntar para un',
+      'juntar para una',
     )
   )
     return 'saveTarget'
@@ -681,7 +714,6 @@ export const readSmartIntent = (q: string, hasAmount: boolean): SmartIntent | un
       'armar un presupuesto',
       'haz un presupuesto',
       'presupuesto me recomiendas',
-      'que presupuesto',
       'proponme un presupuesto',
       'recomiendame un presupuesto',
       'cuanto deberia gastar',
@@ -760,6 +792,8 @@ export const readSmartIntent = (q: string, hasAmount: boolean): SmartIntent | un
       'plata ahorrada',
       'ahorrado en total',
       'he ahorrado en total',
+      'juntado en total',
+      'he juntado en total',
     )
   )
     return 'savedTotal'
@@ -868,8 +902,11 @@ const nextPayOrMonthEnd = (data: FinanceData, today: DateStr) => {
   return { date, days: Math.max(1, daysBetween(today, date)), payday: !!p }
 }
 
-const shouldSave = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
-  const { income, surplus } = normal(data, today)
+const shouldSave = (data: FinanceData, today: DateStr, fmt: Fmt, given?: number): Reply => {
+  const n = normal(data, today)
+  // Si dice cuánto gana, se usa eso
+  const income = given && given >= 50000 ? given : n.income
+  const surplus = given && given >= 50000 ? given - n.expense : n.surplus
   if (!income)
     return {
       text: 'Para decirte cuánto ahorrar necesito ver tus ingresos de un par de meses. Una regla simple mientras: apenas te paguen, aparta el **20%** antes de gastar.',
@@ -878,14 +915,16 @@ const shouldSave = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
     }
   const ideal = roundTo(income * 0.2, 1000)
   const top = categoryAverages(data, today)[0]
-  const state =
-    surplus >= ideal
+  // Con un sueldo hipotético ("si gano 700 lucas") no se compara con lo tuyo
+  const state = given
+    ? ''
+    : surplus >= ideal
       ? `¡Y vas bien! En un mes normal te sobran **${fmt(surplus)}** (el ${pctOf(surplus, income)}%) 💪.`
       : surplus > 0
         ? `Hoy en un mes normal te sobran **${fmt(surplus)}** (el ${pctOf(surplus, income)}%): te faltan ${fmt(ideal - surplus)} para llegar.${top ? ` Donde más podrías recortar es ${top.category.icon} ${top.category.name}.` : ''}`
         : `Hoy en un mes normal gastas **${fmt(-surplus)} más** de lo que te entra: lo primero es equilibrar eso.`
   return {
-    text: `Una buena meta es ahorrar el **20%** de lo que te entra: con lo que ganas en un mes normal (${fmt(income)}), unos **${fmt(ideal)} al mes**. ${state}`,
+    text: `Una buena meta es ahorrar el **20%** de lo que te entra: con ${given ? fmt(income) : `lo que ganas en un mes normal (${fmt(income)})`}, unos **${fmt(ideal)} al mes**. ${state}`.trim(),
     rows: [
       {
         icon: '🏠',
@@ -903,7 +942,7 @@ const shouldSave = (data: FinanceData, today: DateStr, fmt: Fmt): Reply => {
     ],
     why: `Uso la regla 50/30/20 sobre tu ingreso promedio de los últimos 3 meses (${fmt(income)}). Lo que te sobra es ese ingreso menos tu gasto promedio.`,
     kind: 'shouldSave',
-    mood: surplus >= ideal ? 'good' : surplus > 0 ? 'neutral' : 'bad',
+    mood: given ? 'neutral' : surplus >= ideal ? 'good' : surplus > 0 ? 'neutral' : 'bad',
     actions: [{ label: 'Crear meta de ahorro', kind: 'sheet', sheet: { kind: 'goal' } }],
     suggestions: ['¿En qué puedo gastar menos?', 'Hazme un plan de ahorro'],
   }
@@ -1531,7 +1570,7 @@ export const smartReply = (
 ): Reply => {
   switch (intent) {
     case 'shouldSave':
-      return shouldSave(data, today, fmt)
+      return shouldSave(data, today, fmt, ctx.amount)
     case 'salaryPlan':
       return salaryPlan(data, today, fmt, ctx.amount)
     case 'budgetPlan':
