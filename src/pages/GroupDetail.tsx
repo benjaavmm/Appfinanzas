@@ -770,6 +770,9 @@ export default function GroupDetail() {
               Invitar
             </Button>
           </div>
+          <p className="mt-2 text-center text-[11px] text-muted">
+            Quien tenga el link del grupo verá sus gastos y nombres. Si se filtra, cámbialo en los ajustes del grupo.
+          </p>
           {guests.length > 0 && group.entries.length === 0 && (
             <p className="mt-3 rounded-2xl bg-info-soft px-3 py-2 text-xs font-medium text-info">
               Manda el link a {guests.map((g) => g.name).join(', ')}: lo ven sin instalar nada y, si quieren, se unen.

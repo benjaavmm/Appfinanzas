@@ -22,3 +22,23 @@ describe('sanitizeData conserva los ajustes nuevos', () => {
     expect(data.settings.reminders?.dailyHour).toBeUndefined()
   })
 })
+
+describe('constancia de lo que se aceptó', () => {
+  it('guarda versión y fecha de Términos y del aviso de la IA, y descarta lo inválido', () => {
+    const at = '2026-11-23T10:00:00.000Z'
+    const { data } = sanitizeData(
+      {
+        settings: {
+          onboarded: true,
+          legalConsent: { version: '1.0', at },
+          assistant: { ai: true, aiConsent: { version: '1', at } },
+        },
+      },
+      DATA_VERSION,
+    )
+    expect(data.settings.legalConsent).toEqual({ version: '1.0', at })
+    expect(data.settings.assistant?.aiConsent).toEqual({ version: '1', at })
+    const bad = sanitizeData({ settings: { onboarded: true, legalConsent: { version: 5 } } }, DATA_VERSION)
+    expect(bad.data.settings.legalConsent).toBeUndefined()
+  })
+})

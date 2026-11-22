@@ -35,6 +35,11 @@ const THEMES: readonly Settings['theme'][] = ['system', 'light', 'dark']
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
+/** Constancia de lo que aceptó: versión y fecha */
+const consent = (v: unknown): { version: string; at: string } | undefined => {
+  if (!isObj(v) || typeof v.version !== 'string' || typeof v.at !== 'string') return undefined
+  return { version: v.version.slice(0, 20), at: v.at.slice(0, 40) }
+}
 const bool = (v: unknown): boolean | undefined => (typeof v === 'boolean' ? v : undefined)
 const oneOf = <T extends string>(v: unknown, list: readonly T[]): T | undefined => (list.includes(v as T) ? (v as T) : undefined)
 const dateStr = (v: unknown): string | undefined =>
@@ -276,6 +281,7 @@ export const sanitizeData = (r: Record<string, unknown>, version: number): Sanit
       theme: oneOf(s.theme, THEMES),
       monthlyBudget: num(s.monthlyBudget),
       hideAmounts: bool(s.hideAmounts),
+      legalConsent: consent(s.legalConsent),
       defaultAccountId: defaultAccountId && accounts.some((a) => a.id === defaultAccountId) ? defaultAccountId : accounts[0]?.id,
       reminders: rem
         ? clean({
@@ -301,6 +307,7 @@ export const sanitizeData = (r: Record<string, unknown>, version: number): Sanit
             aliases: aliases(ai.aliases),
             payday: intIn(ai.payday, 1, 31),
             ai: bool(ai.ai),
+            aiConsent: consent(ai.aiConsent),
           })
         : undefined,
       bankLinks: links

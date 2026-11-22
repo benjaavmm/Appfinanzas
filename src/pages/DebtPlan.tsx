@@ -193,6 +193,9 @@ export default function DebtPlan() {
               )
             })}
           </ol>
+          <p className="mt-3 text-[11px] text-muted">
+            Plan estimado con lo que anotaste: no es asesoría financiera. Confirma montos, tasas y condiciones con tu banco.
+          </p>
           {missingRate && (
             <p className="mt-3 rounded-2xl bg-warn-soft px-3 py-2 text-xs font-medium text-warn">
               Sin la tasa de tu tarjeta calculo sin intereses y el plan sale más corto de lo real. La encuentras en tu estado de

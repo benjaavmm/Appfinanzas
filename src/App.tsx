@@ -1,5 +1,5 @@
 import { motion, MotionConfig } from 'motion/react'
-import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { useApplyTheme, useHydrated } from './lib/hooks'
 import { useBoot, useStore } from './lib/store'
@@ -19,30 +19,33 @@ import { SheetHost } from './components/forms/SheetHost'
 import { ConfirmDialog, Toaster, UpdateBanner } from './components/ui/Overlays'
 import Dashboard from './pages/Dashboard'
 import Transactions from './pages/Transactions'
-import Insights from './pages/Insights'
-import Loans from './pages/Loans'
-import Subscriptions from './pages/Subscriptions'
-import Budgets from './pages/Budgets'
-import Goals from './pages/Goals'
-import Accounts from './pages/Accounts'
-import Categories from './pages/Categories'
-import Settings from './pages/Settings'
 import More from './pages/More'
 import Onboarding from './pages/Onboarding'
 import LockScreen from './pages/LockScreen'
-import Account from './pages/Account'
-import Friends from './pages/Friends'
-import Assistant from './pages/Assistant'
-import BankAuto from './pages/BankAuto'
-import Groups from './pages/Groups'
-import GroupDetail from './pages/GroupDetail'
-import GroupJoin from './pages/GroupJoin'
-import DebtPlan from './pages/DebtPlan'
-import Warranties from './pages/Warranties'
-import Wrapped from './pages/Wrapped'
 import { startGroups } from './lib/cloud/groups'
 import { startInbox } from './lib/cloud/inbox'
 import { startPush } from './lib/cloud/push'
+
+// Pantallas que se descargan al abrirlas (la primera carga queda más liviana)
+const Insights = lazy(() => import('./pages/Insights'))
+const Loans = lazy(() => import('./pages/Loans'))
+const Subscriptions = lazy(() => import('./pages/Subscriptions'))
+const Budgets = lazy(() => import('./pages/Budgets'))
+const Goals = lazy(() => import('./pages/Goals'))
+const Accounts = lazy(() => import('./pages/Accounts'))
+const Categories = lazy(() => import('./pages/Categories'))
+const Settings = lazy(() => import('./pages/Settings'))
+const Account = lazy(() => import('./pages/Account'))
+const Friends = lazy(() => import('./pages/Friends'))
+const Assistant = lazy(() => import('./pages/Assistant'))
+const BankAuto = lazy(() => import('./pages/BankAuto'))
+const Groups = lazy(() => import('./pages/Groups'))
+const GroupDetail = lazy(() => import('./pages/GroupDetail'))
+const GroupJoin = lazy(() => import('./pages/GroupJoin'))
+const DebtPlan = lazy(() => import('./pages/DebtPlan'))
+const Warranties = lazy(() => import('./pages/Warranties'))
+const Wrapped = lazy(() => import('./pages/Wrapped'))
+const Legal = lazy(() => import('./pages/Legal'))
 
 const LOCK_AFTER_MS = 60_000
 const ACTIVE_KEY = 'mf-last-active'
@@ -95,32 +98,44 @@ const AppRoutes = () => {
     }
   }, [pathname])
   return (
-    <Routes>
-      <Route path="/" element={<Dashboard />} />
-      <Route path="/movimientos" element={<Transactions />} />
-      <Route path="/analisis" element={<Insights />} />
-      <Route path="/prestamos" element={<Loans />} />
-      <Route path="/suscripciones" element={<Subscriptions />} />
-      <Route path="/presupuestos" element={<Budgets />} />
-      <Route path="/metas" element={<Goals />} />
-      <Route path="/cuentas" element={<Accounts />} />
-      <Route path="/categorias" element={<Categories />} />
-      <Route path="/ajustes" element={<Settings />} />
-      <Route path="/mas" element={<More />} />
-      <Route path="/cuenta" element={<Account />} />
-      <Route path="/amigos" element={<Friends />} />
-      <Route path="/asistente" element={<Assistant />} />
-      <Route path="/automatico" element={<BankAuto />} />
-      <Route path="/grupos" element={<Groups />} />
-      <Route path="/deudas" element={<DebtPlan />} />
-      <Route path="/garantias" element={<Warranties />} />
-      <Route path="/resumen" element={<Wrapped />} />
-      <Route path="/grupos/:id" element={<GroupDetail />} />
-      <Route path="/unirse/:code" element={<GroupJoin />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <Suspense fallback={<PageLoading />}>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/movimientos" element={<Transactions />} />
+        <Route path="/analisis" element={<Insights />} />
+        <Route path="/prestamos" element={<Loans />} />
+        <Route path="/suscripciones" element={<Subscriptions />} />
+        <Route path="/presupuestos" element={<Budgets />} />
+        <Route path="/metas" element={<Goals />} />
+        <Route path="/cuentas" element={<Accounts />} />
+        <Route path="/categorias" element={<Categories />} />
+        <Route path="/ajustes" element={<Settings />} />
+        <Route path="/mas" element={<More />} />
+        <Route path="/cuenta" element={<Account />} />
+        <Route path="/amigos" element={<Friends />} />
+        <Route path="/asistente" element={<Assistant />} />
+        <Route path="/automatico" element={<BankAuto />} />
+        <Route path="/grupos" element={<Groups />} />
+        <Route path="/deudas" element={<DebtPlan />} />
+        <Route path="/garantias" element={<Warranties />} />
+        <Route path="/resumen" element={<Wrapped />} />
+        <Route path="/grupos/:id" element={<GroupDetail />} />
+        <Route path="/unirse/:code" element={<GroupJoin />} />
+        <Route path="/privacidad" element={<Legal doc="privacidad" />} />
+        <Route path="/terminos" element={<Legal doc="terminos" />} />
+        <Route path="/aviso-financiero" element={<Legal doc="aviso-financiero" />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   )
 }
+
+/** Mientras se descarga una pantalla */
+const PageLoading = () => (
+  <div className="flex justify-center py-24" aria-label="Cargando">
+    <span className="size-8 animate-spin rounded-full border-4 border-line border-t-brand" />
+  </div>
+)
 
 /**
  * Acciones al abrir la app desde un acceso directo (mantener presionado el ícono),
@@ -262,10 +277,11 @@ export default function App() {
   const onboarded = useStore((s) => s.settings.onboarded)
   const pinHash = useStore((s) => s.settings.pinHash)
   const [unlocked, setUnlocked] = useState(wasRecentlyActive)
-  // Link de un grupo: se ve aunque la persona nunca haya abierto la app
-  const [joinLink, setJoinLink] = useState(() => window.location.hash.startsWith('#/unirse/'))
+  // Links de un grupo y documentos legales: se ven aunque la persona nunca haya abierto la app
+  const isStandalone = () => /^#\/(unirse\/|privacidad|terminos|aviso-financiero)/.test(window.location.hash)
+  const [joinLink, setJoinLink] = useState(isStandalone)
   useEffect(() => {
-    const onHash = () => setJoinLink(window.location.hash.startsWith('#/unirse/'))
+    const onHash = () => setJoinLink(isStandalone())
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
@@ -341,9 +357,14 @@ export default function App() {
     content = joinLink ? (
       <HashRouter>
         <div className="mx-auto max-w-lg px-4">
-          <Routes>
-            <Route path="/unirse/:code" element={<GroupJoin standalone />} />
-          </Routes>
+          <Suspense fallback={<PageLoading />}>
+            <Routes>
+              <Route path="/unirse/:code" element={<GroupJoin standalone />} />
+              <Route path="/privacidad" element={<Legal doc="privacidad" standalone />} />
+              <Route path="/terminos" element={<Legal doc="terminos" standalone />} />
+              <Route path="/aviso-financiero" element={<Legal doc="aviso-financiero" standalone />} />
+            </Routes>
+          </Suspense>
         </div>
       </HashRouter>
     ) : (

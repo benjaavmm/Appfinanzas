@@ -1,3 +1,4 @@
+import { LegalLinks } from '../components/LegalLinks'
 import { Link } from 'react-router'
 import { ChevronRight } from 'lucide-react'
 import { debtTotals, goalsSavedTotal } from '../lib/finance'
@@ -76,6 +77,7 @@ export default function More() {
           </div>
         ))}
       </div>
+      <LegalLinks />
     </div>
   )
 }

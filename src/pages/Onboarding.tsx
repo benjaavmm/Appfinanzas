@@ -174,7 +174,16 @@ export default function Onboarding() {
                   <CloudCheck className="size-4" /> Conectado como @{profile.username}: todo se respaldará en tu cuenta
                 </p>
               ) : (
-                <p className="pt-2 text-center text-[11px] text-muted">🔒 Tus datos se guardan solo en este dispositivo.</p>
+                <p className="pt-2 text-center text-[11px] text-muted">
+                  🔒 Tus datos se guardan solo en este dispositivo ·{' '}
+                  <a href="#/privacidad" className="underline">
+                    Privacidad
+                  </a>{' '}
+                  ·{' '}
+                  <a href="#/terminos" className="underline">
+                    Términos
+                  </a>
+                </p>
               )}
             </div>
           </div>

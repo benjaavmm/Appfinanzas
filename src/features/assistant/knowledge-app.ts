@@ -481,7 +481,7 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     title: 'Borrar una cuenta',
     answer:
-      'Depende de cuál: si es una **cuenta de plata** (efectivo, débito, tarjeta), ve a **Más → Cuentas**, tócala y elige **Eliminar** (o archívala para guardar su historial). Si hablas de **tu cuenta de la app**, en **Más → Mi cuenta** puedes cerrar sesión: tus datos quedan en el teléfono.',
+      'Depende de cuál: si es una **cuenta de plata** (efectivo, débito, tarjeta), ve a **Más → Cuentas**, tócala y elige **Eliminar** (o archívala para guardar su historial). Si hablas de **tu cuenta de la app**, ve a **Más → Mi cuenta → Eliminar mi cuenta y mis datos**: se borra todo lo tuyo en la nube (en los grupos de otros tus gastos quedan como "Ex integrante"). Lo que está en tu teléfono lo decides tú.',
     action: { label: 'Ir a Cuentas', kind: 'nav', to: '/cuentas' },
     related: ['¿Cómo borro todos mis datos?'],
   },

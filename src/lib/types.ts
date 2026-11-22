@@ -187,6 +187,8 @@ export interface Settings {
   monthlyBudget?: number
   hideAmounts: boolean
   pinHash?: string
+  /** Versión de Términos y Privacidad que aceptó y cuándo */
+  legalConsent?: { version: string; at: string }
   defaultAccountId?: ID
   onboarded: boolean
   reminders?: ReminderSettings
@@ -207,6 +209,8 @@ export interface Settings {
     payday?: number
     /** Lo que el asistente no entiende se lo pregunta a la IA (Gemini), con un resumen de tus números */
     ai?: boolean
+    /** Versión del aviso de la IA que aceptó y cuándo */
+    aiConsent?: { version: string; at: string }
   }
 }
 

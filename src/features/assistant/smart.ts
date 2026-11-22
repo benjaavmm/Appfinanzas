@@ -192,7 +192,7 @@ const loanReplyFor = (
   const c = installmentWithInterest(amount, n, monthly)
   const rateText = `${decimal(rate)}% ${opts.annual ? 'anual' : 'mensual'}`
   return {
-    text: `${opts.example ? `Depende de la tasa que te den. Con una tasa de ejemplo de **${rateText}**, un` : 'Con un'} crédito de **${fmt(amount)}** en **${n} cuotas**${opts.example ? '' : ` al **${rateText}**`} pagarías **${fmt(c.cuota)} al mes**: en total ${fmt(c.total)}, o sea **${fmt(c.interest)} de intereses**.${surplusLine(data, today, fmt, c.cuota)}${opts.example ? ' Antes de pedirlo, compara la **CAE** entre bancos: es el costo total del crédito y te dice cuál sale más barato.' : ''}`,
+    text: `${opts.example ? `Depende de la tasa que te den. Con una tasa de ejemplo de **${rateText}**, un` : 'Con un'} crédito de **${fmt(amount)}** en **${n} cuotas**${opts.example ? '' : ` al **${rateText}**`} pagarías **${fmt(c.cuota)} al mes**: en total ${fmt(c.total)}, o sea **${fmt(c.interest)} de intereses**.${surplusLine(data, today, fmt, c.cuota)}${opts.example ? ' Es un cálculo con una tasa de ejemplo: tu banco te dará la cuota real. Antes de pedirlo, compara la **CAE** entre bancos: es el costo total del crédito y te dice cuál sale más barato.' : ''}`,
     rows: [
       { icon: '📅', label: 'Cuota al mes', value: fmt(c.cuota) },
       { icon: '🧾', label: 'Total a pagar', value: fmt(c.total) },

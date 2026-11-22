@@ -15,6 +15,8 @@ import {
 } from '../../lib/cloud/auth'
 import { vibrate } from '../../lib/hooks'
 import { toast } from '../../lib/ui'
+import { useStore } from '../../lib/store'
+import { LEGAL_VERSION } from '../../lib/legal'
 import { Button, cx, Segmented } from '../../components/ui'
 
 type Mode = 'login' | 'signup' | 'forgot' | 'magic' | 'sent'
@@ -102,6 +104,8 @@ export const AuthForm = ({
   const [username, setUsername] = useState('')
   const [userState, setUserState] = useState<'idle' | 'checking' | 'free' | 'taken' | 'invalid'>('idle')
   const [busy, setBusy] = useState(false)
+  // Al crear cuenta hay que aceptar Términos y Privacidad
+  const [accepted, setAccepted] = useState(false)
   const [error, setError] = useState<string | null>(() => takeAuthNotice())
   const [sentText, setSentText] = useState('')
 
@@ -131,7 +135,12 @@ export const AuthForm = ({
     (mode === 'login'
       ? emailOk && password.length > 0
       : mode === 'signup'
-        ? emailOk && password.length >= 8 && name.trim().length > 0 && USERNAME_RE.test(username) && userState !== 'taken'
+        ? emailOk &&
+          password.length >= 8 &&
+          name.trim().length > 0 &&
+          USERNAME_RE.test(username) &&
+          userState !== 'taken' &&
+          accepted
         : emailOk)
 
   const submit = async (e: FormEvent) => {
@@ -147,6 +156,7 @@ export const AuthForm = ({
         onSignedIn?.()
       } else if (mode === 'signup') {
         const needsConfirm = await signUp({ email, password, username, displayName: name })
+        recordConsent()
         vibrate(20)
         if (needsConfirm) {
           setSentText(`Te enviamos un link a ${email.trim()} para confirmar tu cuenta. Ábrelo en este mismo teléfono.`)
@@ -306,6 +316,35 @@ export const AuthForm = ({
         </div>
       )}
 
+      {mode === 'signup' && (
+        <div className="space-y-2 rounded-2xl bg-surface-2 p-3 text-xs text-ink-2">
+          <p>
+            Al crear tu cuenta, tus datos de la app se respaldan en servidores de Supabase para que no los pierdas y puedas
+            usarlos en otros dispositivos. No incluye las fotos de tus boletas ni tu PIN. Puedes eliminar tu cuenta cuando
+            quieras.
+          </p>
+          <label className="flex items-start gap-2 font-semibold text-ink">
+            <input
+              type="checkbox"
+              checked={accepted}
+              onChange={(e) => setAccepted(e.target.checked)}
+              className="mt-0.5 size-4 accent-[var(--color-brand,#6655f5)]"
+            />
+            <span>
+              Leí y acepto los{' '}
+              <a href="#/terminos" target="_blank" rel="noopener" className="text-brand underline">
+                Términos
+              </a>{' '}
+              y la{' '}
+              <a href="#/privacidad" target="_blank" rel="noopener" className="text-brand underline">
+                Política de privacidad
+              </a>
+              .
+            </span>
+          </label>
+        </div>
+      )}
+
       {error && (
         <p role="alert" className="flex gap-2 rounded-2xl bg-bad-soft px-3 py-2.5 text-sm font-medium text-bad">
           <CircleAlert className="mt-0.5 size-4 shrink-0" /> {error}
@@ -335,11 +374,25 @@ export const AuthForm = ({
               variant="secondary"
               block
               icon={<GoogleIcon />}
-              onClick={() => void signInWithGoogle().catch((e: Error) => setError(e.message))}
+              onClick={() => {
+                recordConsent()
+                void signInWithGoogle().catch((e: Error) => setError(e.message))
+              }}
             >
               Continuar con Google
             </Button>
           )}
+          <p className="text-center text-[11px] text-muted">
+            Al continuar aceptas los{' '}
+            <a href="#/terminos" target="_blank" rel="noopener" className="underline">
+              Términos
+            </a>{' '}
+            y la{' '}
+            <a href="#/privacidad" target="_blank" rel="noopener" className="underline">
+              Política de privacidad
+            </a>
+            .
+          </p>
           <Button type="button" variant="ghost" block icon={<Mail className="size-5" />} onClick={() => setMode('magic')}>
             Entrar con un link al correo
           </Button>
@@ -353,6 +406,10 @@ export const AuthForm = ({
     </form>
   )
 }
+
+/** Deja constancia de qué versión de Términos y Privacidad se aceptó y cuándo */
+const recordConsent = () =>
+  useStore.getState().updateSettings({ legalConsent: { version: LEGAL_VERSION, at: new Date().toISOString() } })
 
 /** Pedir la contraseña nueva al volver del correo de recuperación */
 export const NewPasswordForm = () => {

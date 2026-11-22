@@ -38,7 +38,7 @@ export const FutureCard = ({ compact = false }: { compact?: boolean }) => {
     <Card>
       <SectionHeader
         title="Tu yo del futuro"
-        subtitle="Lo que ya está comprometido de tus próximos meses"
+        subtitle="Lo ya comprometido de tus próximos meses, según lo que anotaste"
         to={compact ? '/analisis' : undefined}
         action={compact ? 'Ver' : undefined}
       />

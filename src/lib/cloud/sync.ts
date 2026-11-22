@@ -32,6 +32,16 @@ function readMeta(): SyncMeta | null {
     return null
   }
 }
+/** Olvida con qué cuenta se respaldaba este dispositivo (al eliminar la cuenta) */
+export const forgetSyncedAccount = () => {
+  try {
+    localStorage.removeItem(META_KEY)
+  } catch {
+    /* nada */
+  }
+  useSync.setState({ lastSync: null, error: null })
+}
+
 /** Cuenta con la que se respaldó este dispositivo (null si nunca se usó una) */
 export const syncedUserId = () => readMeta()?.userId ?? null
 

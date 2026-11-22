@@ -16,8 +16,12 @@ import {
   Users,
 } from 'lucide-react'
 import { cloudConfigured } from '../lib/cloud/client'
-import { signOut, updateProfile, USERNAME_RE, useAuth } from '../lib/cloud/auth'
-import { syncNow, useSync } from '../lib/cloud/sync'
+import { deleteMyAccount, signOut, updateProfile, USERNAME_RE, useAuth } from '../lib/cloud/auth'
+import { forgetSyncedAccount, syncNow, useSync } from '../lib/cloud/sync'
+import { exportJSON } from '../lib/backup'
+import { useData } from '../lib/hooks'
+import { useStore } from '../lib/store'
+import { LEGAL_VERSION } from '../lib/legal'
 import { ask, toast } from '../lib/ui'
 import { AuthForm, NewPasswordForm } from '../features/account/AuthForm'
 import { Avatar } from '../components/forms/LoanForms'
@@ -163,6 +167,106 @@ const SyncCard = () => {
   )
 }
 
+/** Términos nuevos (o cuentas creadas antes de tenerlos): se piden una vez */
+const ConsentCard = () => {
+  const consent = useStore((s) => s.settings.legalConsent)
+  if (consent?.version === LEGAL_VERSION) return null
+  return (
+    <Card className="space-y-3 border-brand">
+      <p className="font-bold">Términos y Privacidad</p>
+      <p className="text-sm text-ink-2">
+        Publicamos los{' '}
+        <Link to="/terminos" className="text-brand underline">
+          Términos
+        </Link>{' '}
+        y la{' '}
+        <Link to="/privacidad" className="text-brand underline">
+          Política de privacidad
+        </Link>{' '}
+        de Mis Finanzas: explican qué datos se respaldan en la nube, con quién se comparten y cómo eliminarlos.
+      </p>
+      <Button
+        size="sm"
+        onClick={() =>
+          useStore.getState().updateSettings({ legalConsent: { version: LEGAL_VERSION, at: new Date().toISOString() } })
+        }
+      >
+        Leí y acepto
+      </Button>
+    </Card>
+  )
+}
+
+/** Eliminar la cuenta y todo lo que hay en la nube */
+const DeleteAccount = () => {
+  const data = useData()
+  const resetAll = useStore((s) => s.resetAll)
+  const [open, setOpen] = useState(false)
+  const [word, setWord] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const remove = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await deleteMyAccount()
+      forgetSyncedAccount()
+      toast({ message: 'Tu cuenta y tus datos de la nube se eliminaron', tone: 'good' })
+      const wipe = await ask({
+        title: '¿Borrar también este teléfono?',
+        message:
+          'Tu cuenta ya no existe. Tus datos siguen guardados en este teléfono: puedes seguir usando la app sin cuenta o borrarlos también.',
+        confirmLabel: 'Borrar este teléfono',
+        cancelLabel: 'Conservarlos',
+        danger: true,
+      })
+      if (wipe) resetAll()
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!open)
+    return (
+      <button type="button" className="py-2 text-sm font-semibold text-bad" onClick={() => setOpen(true)}>
+        Eliminar mi cuenta y mis datos
+      </button>
+    )
+  return (
+    <Card className="space-y-3 border-bad">
+      <p className="font-bold text-bad">¿Eliminar tu cuenta y tus datos?</p>
+      <p className="text-sm text-ink-2">
+        Se borrarán de la nube tu cuenta, tu respaldo, tus amistades, tus préstamos compartidos, tus avisos del banco y tus
+        recordatorios. En los grupos tus gastos se mantienen para que las cuentas de los demás sigan cuadrando, pero con el nombre
+        "Ex integrante"; los grupos que creaste pasan a otro integrante. <b>Esto no se puede deshacer.</b>
+      </p>
+      <Button variant="secondary" size="sm" onClick={() => exportJSON(data)}>
+        Descargar un respaldo antes
+      </Button>
+      <Field label="Para confirmar, escribe ELIMINAR">
+        <Input value={word} onChange={(e) => setWord(e.target.value)} autoCapitalize="characters" autoComplete="off" />
+      </Field>
+      {error && <p className="rounded-2xl bg-bad-soft px-3 py-2 text-sm font-medium text-bad">{error}</p>}
+      <div className="flex gap-2">
+        <Button
+          variant="danger"
+          size="sm"
+          disabled={busy || word.trim().toUpperCase() !== 'ELIMINAR'}
+          onClick={() => void remove()}
+        >
+          {busy ? <LoaderCircle className="size-4 animate-spin" /> : 'Eliminar definitivamente'}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+          Cancelar
+        </Button>
+      </div>
+    </Card>
+  )
+}
+
 export default function Account() {
   const { status, profile, email, recovering } = useAuth()
   const [editing, setEditing] = useState(false)
@@ -226,6 +330,7 @@ export default function Account() {
               <NewPasswordForm />
             </Card>
           )}
+          <ConsentCard />
           <Card>
             <div className="flex items-center gap-4">
               <ProfileAvatar name={profile?.display_name ?? email ?? '?'} avatar={profile?.avatar} size={64} />
@@ -259,6 +364,7 @@ export default function Account() {
           <Button variant="danger" block icon={<LogOut className="size-5" />} onClick={() => void logout()}>
             Cerrar sesión
           </Button>
+          <DeleteAccount />
         </div>
       )}
     </div>

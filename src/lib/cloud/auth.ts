@@ -172,6 +172,19 @@ export const signOut = async () => {
   applySession(null)
 }
 
+/** Elimina la cuenta y todos sus datos en la nube (función delete_my_account del esquema) */
+export const deleteMyAccount = async () => {
+  const sb = await supabase()
+  const { error } = await sb.rpc('delete_my_account')
+  if (error) {
+    if (/delete_my_account|function|schema cache/i.test(error.message))
+      throw new Error('Falta actualizar la base de datos: vuelve a correr supabase/schema.sql en Supabase.')
+    throw new Error(error.message)
+  }
+  await sb.auth.signOut({ scope: 'local' }).catch(() => undefined)
+  applySession(null)
+}
+
 export const usernameAvailable = async (u: string): Promise<boolean> => {
   const sb = await supabase()
   const { data, error } = await sb.rpc('username_available', { u })

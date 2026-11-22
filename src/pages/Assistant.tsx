@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { create } from 'zustand'
 import { ArrowUp, Check, Mic, RotateCcw, Smile, Sparkles } from 'lucide-react'
 import { useData, useMoney, useToday, vibrate } from '../lib/hooks'
@@ -12,6 +12,7 @@ import { useAuth } from '../lib/cloud/auth'
 import { askAi } from '../lib/cloud/ai'
 import { cloudConfigured } from '../lib/cloud/client'
 import { buildAiContext } from '../features/assistant/aiContext'
+import { AI_CONSENT_VERSION } from '../lib/legal'
 import { DEFAULT_BOT_NAME, DEFAULT_PERSONALITY, PERSONALITIES, type PersonalityId } from '../features/assistant/personality'
 import { useDictation } from '../features/quick/speech'
 import { TxItem } from '../components/TxItem'
@@ -148,10 +149,17 @@ const isPersonality = (v?: string): v is PersonalityId => !!v && v in PERSONALIT
 
 /** Qué se le manda a la IA: se explica antes de activarla */
 const AI_PRIVACY =
-  'Lo que yo no sé responder se lo paso a Gemini, la IA de Google, con un resumen de tus números: totales por categoría, tarjetas, cuotas, y los nombres de tus metas y suscripciones. No van nombres de personas, lugares ni notas. Google puede usar lo que se le envía para mejorar su servicio, así que no escribas datos sensibles en la pregunta.'
+  'Lo que yo no sé responder se lo paso a Gemini, la IA de Google, con un resumen de tus números: totales por categoría, tarjetas, cuotas, y los nombres de tus metas y suscripciones. No van nombres de personas, lugares ni notas. En el plan gratuito, Google puede usar lo enviado para mejorar su servicio y personas pueden revisarlo, así que no escribas tu RUT, claves ni números de tarjeta.'
 
 const setAi = (on: boolean) =>
-  useStore.getState().updateSettings({ assistant: { ...useStore.getState().settings.assistant, ai: on || undefined } })
+  useStore.getState().updateSettings({
+    assistant: {
+      ...useStore.getState().settings.assistant,
+      ai: on || undefined,
+      // Constancia de qué aviso aceptó y cuándo
+      ...(on ? { aiConsent: { version: AI_CONSENT_VERSION, at: new Date().toISOString() } } : {}),
+    },
+  })
 
 const AiSwitch = () => {
   const on = useStore((s) => !!s.settings.assistant?.ai)
@@ -543,6 +551,12 @@ export default function Assistant() {
         )}
       </form>
       {dictation.error && <p className="mt-2 text-center text-xs text-bad">{dictation.error}</p>}
+      <p className="mt-2 text-center text-[11px] text-muted">
+        Respuestas estimadas con lo que anotaste: no es asesoría financiera.{' '}
+        <Link to="/aviso-financiero" className="underline">
+          Más info
+        </Link>
+      </p>
     </div>
   )
 }

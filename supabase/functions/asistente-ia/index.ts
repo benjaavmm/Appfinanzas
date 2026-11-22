@@ -11,7 +11,8 @@
  * Cómo instalarla:
  * 1. Crea tu clave gratis en https://aistudio.google.com/apikey
  * 2. Supabase → Edge Functions → Secrets → agrega GEMINI_API_KEY con esa clave.
- *    (Opcional: GEMINI_MODEL para otro modelo, IA_LIMITE_DIARIO para otro límite al día.)
+ *    (Opcional: GEMINI_MODEL para otro modelo, IA_LIMITE_DIARIO para el límite por persona al día,
+ *    IA_LIMITE_GLOBAL para el límite entre todos al día; por defecto 25 y 300.)
  * 3. Supabase → Edge Functions → Deploy a new function → Via Editor, nombre "asistente-ia",
  *    pega este archivo y despliega. En sus ajustes apaga "Verify JWT": la función revisa la
  *    sesión por su cuenta (así funciona con las claves nuevas y las antiguas).
@@ -22,6 +23,8 @@ const SUPABASE_URL = (Deno.env.get('SUPABASE_URL') ?? '').replace(/\/+$/, '')
 const GEMINI_KEY = Deno.env.get('GEMINI_API_KEY') ?? ''
 const MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-flash-latest'
 const DAILY_LIMIT = Math.max(1, Number(Deno.env.get('IA_LIMITE_DIARIO') ?? '25') || 25)
+/** Tope de preguntas al día entre todos, para no agotar la cuota gratis de Gemini */
+const GLOBAL_LIMIT = Math.max(1, Number(Deno.env.get('IA_LIMITE_GLOBAL') ?? '300') || 300)
 const GEMINI_URL = (Deno.env.get('GEMINI_BASE_URL') || 'https://generativelanguage.googleapis.com').replace(/\/+$/, '')
 
 /** Clave de servidor: la nueva (sb_secret_…) o la antigua service_role */
@@ -66,6 +69,14 @@ const userOf = async (req: Request): Promise<string | null> => {
   if (!res.ok) return null
   const user = (await res.json()) as { id?: string; role?: string }
   return user.id && user.role !== 'anon' ? user.id : null
+}
+
+/** Llama a una función de la base que devuelve un número */
+const rpcNumber = async (name: string): Promise<number> => {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, { method: 'POST', headers: serverHeaders(), body: '{}' })
+  const text = await res.text()
+  if (!res.ok) throw new Error(`${name}: ${res.status} ${text.slice(0, 200)}`)
+  return Number(JSON.parse(text))
 }
 
 /** Suma una pregunta de hoy y devuelve cuántas lleva */
@@ -173,6 +184,8 @@ Deno.serve(async (req) => {
 
   let used: number
   try {
+    const total = await rpcNumber('ai_total_today')
+    if (total >= GLOBAL_LIMIT) return json({ error: 'cuota' }, 429)
     used = await useQuota(user)
   } catch (e) {
     console.error(e)

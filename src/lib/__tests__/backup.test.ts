@@ -143,3 +143,15 @@ describe('parseBackup · ajustes', () => {
     expect(parseBackup(make({ settings: { defaultAccountId: 'a1' } })).settings.defaultAccountId).toBe('a1')
   })
 })
+
+describe('exportar a Excel (CSV)', () => {
+  it('un texto que parece fórmula queda como texto', async () => {
+    const { csvCell } = await import('../backup')
+    expect(csvCell('=HYPERLINK("http://x","clic")')).toBe(`"'=HYPERLINK(""http://x"",""clic"")"`)
+    expect(csvCell('+56912345678')).toBe("'+56912345678")
+    expect(csvCell('@SUMA(A1)')).toBe("'@SUMA(A1)")
+    expect(csvCell('Líder')).toBe('Líder')
+    // Los montos negativos son números, no texto: se mantienen
+    expect(csvCell(-5000)).toBe('-5000')
+  })
+})

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { exportCSV, exportJSON, parseBackupReport } from '../lib/backup'
 import { hashPin } from '../lib/pin'
+import { LegalLinks } from '../components/LegalLinks'
 import { BiometricRow } from '../features/security/BiometricRow'
 import { disableBiometric } from '../lib/biometric'
 import { buildDemoData } from '../lib/demo'
@@ -161,7 +162,11 @@ export default function Settings() {
             </Row>
             <Row
               title="Bloqueo con PIN"
-              text={settings.pinHash ? 'Activado: se pedirá al abrir la app.' : 'Pide un PIN de 4 dígitos al abrir la app.'}
+              text={
+                settings.pinHash
+                  ? 'Activado: se pedirá al abrir la app. Evita que otros la abran; no cifra tus datos.'
+                  : 'Pide un PIN de 4 dígitos al abrir la app. Evita que otros la abran; no cifra tus datos.'
+              }
             >
               {settings.pinHash ? (
                 <Button
@@ -192,7 +197,7 @@ export default function Settings() {
           <p className="mb-3 text-xs text-muted">
             {signedIn
               ? 'Tus datos se guardan en este dispositivo y se respaldan en tu cuenta. Igual puedes descargar un respaldo en un archivo.'
-              : 'Todo se guarda solo en este dispositivo (nada se sube a internet). Descarga un respaldo de vez en cuando, sobre todo antes de cambiar de teléfono.'}
+              : 'Todo se guarda solo en este dispositivo (nada se sube a internet). Si lo pierdes o borras los datos del navegador, se pierden: descarga un respaldo de vez en cuando, sobre todo antes de cambiar de teléfono.'}
           </p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Button
@@ -279,8 +284,7 @@ export default function Settings() {
                 if (
                   !(await ask({
                     title: '¿Cargar datos de ejemplo?',
-                    message:
-                      'Reemplaza tus datos actuales por 4 meses de movimientos de ejemplo. Descarga un respaldo antes si quieres conservarlos.',
+                    message: `Reemplaza tus datos actuales${data.transactions.length ? ` (${data.transactions.length} movimientos)` : ''} por 4 meses de movimientos de ejemplo${signedIn ? ', también en tu respaldo de la nube' : ''}. Descarga un respaldo antes si quieres conservarlos.`,
                     confirmLabel: 'Cargar ejemplo',
                     danger: true,
                   }))
@@ -373,6 +377,7 @@ export default function Settings() {
           )}
         </div>
       </Sheet>
+      <LegalLinks />
     </div>
   )
 }

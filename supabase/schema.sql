@@ -575,7 +575,8 @@ $$;
 
 create or replace function public.group_new_code()
 returns text language sql volatile set search_path = public as $$
-  select left(replace(gen_random_uuid()::text, '-', ''), 14);
+  -- 24 caracteres al azar: imposible de adivinar
+  select left(replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''), 24);
 $$;
 
 alter table public.groups enable row level security;
@@ -854,6 +855,53 @@ do $$ begin
     grant execute on function public.ai_use(uuid) to service_role;
   end if;
 end $$;
+
+-- Cuántas preguntas a la IA hubo hoy entre todos (tope global para no agotar la cuota gratis)
+create or replace function public.ai_total_today()
+returns int
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(sum(count), 0)::int from public.ai_usage where day = (now() at time zone 'America/Santiago')::date;
+$$;
+revoke all on function public.ai_total_today() from public, anon, authenticated;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function public.ai_total_today() to service_role;
+  end if;
+end $$;
+
+-- ═══════════════════════ Eliminar mi cuenta y mis datos ═══════════════════════
+-- Borra la cuenta de quien la llama y todo lo suyo en la nube (respaldo, perfil, amistades,
+-- préstamos compartidos, buzón del banco, avisos, conteo de la IA). En los grupos de otros, sus
+-- gastos se mantienen para que las cuentas sigan cuadrando, pero su nombre pasa a "Ex integrante";
+-- los grupos que creó pasan a otro integrante con cuenta, o se borran si no queda ninguno.
+create or replace function public.delete_my_account()
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare me uuid := auth.uid();
+begin
+  if me is null then raise exception 'not_authenticated'; end if;
+  update public.groups g
+     set created_by = (select m.user_id from public.group_members m
+                        where m.group_id = g.id and m.user_id is not null and m.user_id <> me
+                        order by m.created_at limit 1)
+   where g.created_by = me
+     and exists (select 1 from public.group_members m
+                  where m.group_id = g.id and m.user_id is not null and m.user_id <> me);
+  delete from public.groups where created_by = me;
+  update public.group_members set user_id = null, name = 'Ex integrante' where user_id = me;
+  update public.group_entries set created_by = null where created_by = me;
+  -- Lo demás se borra en cascada con la cuenta
+  delete from auth.users where id = me;
+end $$;
+revoke all on function public.delete_my_account() from public, anon;
+grant execute on function public.delete_my_account() to authenticated;
 
 -- Para que la API vea las funciones nuevas al tiro
 notify pgrst, 'reload schema';

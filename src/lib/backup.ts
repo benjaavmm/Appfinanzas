@@ -26,8 +26,10 @@ export const exportJSON = (data: FinanceData) => {
   )
 }
 
-const csvCell = (v: string | number | undefined) => {
-  const s = v === undefined ? '' : String(v)
+export const csvCell = (v: string | number | undefined) => {
+  let s = v === undefined ? '' : String(v)
+  // Un texto que empieza con = + - @ Excel lo trataría como fórmula: se marca como texto
+  if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`
   return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 

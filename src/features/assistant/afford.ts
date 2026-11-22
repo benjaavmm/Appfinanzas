@@ -294,7 +294,7 @@ export const affordReply = (
   let advice = ''
   switch (a.verdict) {
     case 'yes':
-      head = item ? `**Sí, ${youCan}.**` : '**Sí, te alcanza.**'
+      head = item ? `**Según lo que anotaste, sí, ${youCan}.**` : '**Según lo que anotaste, sí te alcanza.**'
       advice =
         a.goal && amount > Math.max(0, m.surplus)
           ? ` Solo considera que es más de lo que te sobra en un mes, y estás juntando para ${a.goal.icon} ${a.goal.name}.`

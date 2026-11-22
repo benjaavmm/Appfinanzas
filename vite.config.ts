@@ -4,6 +4,8 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
+import { createHash } from 'node:crypto'
+import type { Plugin } from 'vite'
 
 // BASE_PATH lo define el workflow de GitHub Pages ("/Appfinanzas/").
 // En local se sirve desde la raíz.
@@ -12,12 +14,65 @@ const base = process.env.BASE_PATH ?? '/'
 // Identifica la versión publicada (se muestra en Ajustes)
 const build = { sha: (process.env.GITHUB_SHA ?? 'local').slice(0, 7), time: new Date().toISOString() }
 
+/**
+ * Seguridad del HTML publicado (GitHub Pages no deja poner cabeceras propias):
+ * - Política de seguridad de contenido (CSP): solo se ejecutan los scripts de la app y solo se
+ *   conecta con la propia app y con Supabase. Los scripts en línea van con su huella (hash).
+ * - Freno para que otra página no pueda meter la app dentro de un marco (clickjacking).
+ * - Que no aparezca en buscadores y que el link se vea bien al compartirlo.
+ */
+const securityHtml = (): Plugin => ({
+  name: 'mis-finanzas-security-html',
+  apply: 'build',
+  transformIndexHtml: {
+    order: 'post',
+    handler(html) {
+      const cloud = (process.env.VITE_SUPABASE_URL ?? '').replace(/\/+$/, '')
+      const cloudWs = cloud.replace(/^https:/, 'wss:')
+      const owner = process.env.GITHUB_REPOSITORY_OWNER
+      const site = owner ? `https://${owner.toLowerCase()}.github.io${base}` : ''
+      const frameGuard =
+        'if (window.top !== window.self) { document.documentElement.style.display = "none"; try { window.top.location = window.self.location } catch (e) {} }'
+      let out = html.replace('<title>', `<script>${frameGuard}</script>\n    <title>`)
+      const hashes = [...out.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
+        (m) => `'sha256-${createHash('sha256').update(m[1]).digest('base64')}'`,
+      )
+      const csp = [
+        "default-src 'self'",
+        `script-src 'self' ${hashes.join(' ')} 'wasm-unsafe-eval'`,
+        "worker-src 'self' blob:",
+        `connect-src 'self'${cloud ? ` ${cloud} ${cloudWs}` : ''}`,
+        "img-src 'self' data: blob:",
+        "media-src 'self' blob:",
+        "style-src 'self' 'unsafe-inline'",
+        "font-src 'self' data:",
+        "manifest-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+      ].join('; ')
+      const meta = [
+        `<meta http-equiv="Content-Security-Policy" content="${csp}" />`,
+        '<meta name="referrer" content="strict-origin-when-cross-origin" />',
+        '<meta name="robots" content="noindex, nofollow" />',
+        '<meta property="og:title" content="Mis Finanzas" />',
+        '<meta property="og:description" content="Ordena tu plata: gastos, cuotas, préstamos, grupos y metas." />',
+        ...(site
+          ? [`<meta property="og:image" content="${site}pwa-512.png" />`, `<meta property="og:url" content="${site}" />`]
+          : []),
+      ].join('\n    ')
+      return out.replace(/<meta charset="UTF-8" \/>/, (m) => `${m}\n    ${meta}`)
+    },
+  },
+})
+
 export default defineConfig({
   base,
   define: {
     __APP_BUILD__: JSON.stringify(build),
   },
   plugins: [
+    securityHtml(),
     react(),
     tailwindcss(),
     // Lector de boletas (OCR): se sirve desde la propia app, sin depender de CDNs.
