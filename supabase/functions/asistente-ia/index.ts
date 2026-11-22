@@ -125,7 +125,10 @@ const askGemini = async (system: string, history: Turn[], question: string) => {
   if (res.status === 429) return { error: 'cuota' as const }
   if (!res.ok) {
     console.error('gemini', res.status, body.error?.message)
-    return { error: res.status === 400 || res.status === 403 || res.status === 404 ? ('clave' as const) : ('ia' as const) }
+    return {
+      error: res.status === 400 || res.status === 403 || res.status === 404 ? ('clave' as const) : ('ia' as const),
+      detail: `Gemini ${res.status}: ${(body.error?.message ?? '').slice(0, 200)}`,
+    }
   }
   const text = (body.candidates?.[0]?.content?.parts ?? [])
     .filter((p) => !p.thought && typeof p.text === 'string')
@@ -179,10 +182,11 @@ Deno.serve(async (req) => {
 
   try {
     const r = await askGemini(systemPrompt(name, context), history, question)
-    if ('error' in r) return json({ error: r.error }, r.error === 'cuota' ? 429 : 502)
+    if ('error' in r)
+      return json({ error: r.error, detail: 'detail' in r ? r.detail : undefined }, r.error === 'cuota' ? 429 : 502)
     return json({ text: r.text, left: DAILY_LIMIT - used })
   } catch (e) {
     console.error(e)
-    return json({ error: 'ia' }, 502)
+    return json({ error: 'ia', detail: String((e as Error)?.message ?? e).slice(0, 200) }, 502)
   }
 })

@@ -22,6 +22,7 @@ const MESSAGES: Record<string, string> = {
   clave: 'La clave de Gemini guardada en Supabase no funciona. Revísala en Google AI Studio.',
   base: 'Falta actualizar la base de datos: vuelve a correr supabase/schema.sql en Supabase.',
   bloqueada: 'La IA no quiso responder esa pregunta. Prueba preguntándolo de otra forma.',
+  vacia: 'La IA respondió en blanco. Prueba de nuevo.',
 }
 
 /** Lo que responde la IA viene con listas de markdown: se dejan como en el chat */
@@ -50,16 +51,18 @@ export const askAi = async (q: AiQuestion): Promise<AiResult> => {
       signal: ctrl.signal,
     }).finally(() => clearTimeout(timer))
     if (res.status === 404) return { ok: false, message: 'Falta instalar la función "asistente-ia" en Supabase.' }
-    const body = (await res.json().catch(() => ({}))) as { text?: string; left?: number; error?: string }
+    const body = (await res.json().catch(() => ({}))) as { text?: string; left?: number; error?: string; detail?: string }
     if (res.ok && body.text) return { ok: true, text: tidyAiText(body.text), left: body.left }
-    return { ok: false, message: MESSAGES[body.error ?? ''] ?? 'No pude hablar con la IA ahora. Prueba en un rato.' }
+    // Con el detalle a la vista se sabe qué arreglar
+    const why = body.detail ? ` _(${body.detail})_` : ` _(código ${res.status}${body.error ? ` · ${body.error}` : ''})_`
+    return { ok: false, message: `${MESSAGES[body.error ?? ''] ?? 'No pude hablar con la IA ahora.'}${why}` }
   } catch (e) {
     return {
       ok: false,
       message:
         (e as Error)?.name === 'AbortError'
           ? 'La IA se demoró demasiado. Prueba de nuevo.'
-          : 'No pude hablar con la IA ahora. Prueba en un rato.',
+          : `No pude conectarme con la función de la IA _(${(e as Error)?.message ?? 'sin conexión'}: revisa que esté desplegada con el nombre "asistente-ia" y con "Verify JWT" apagado)_`,
     }
   }
 }
