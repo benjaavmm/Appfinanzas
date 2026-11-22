@@ -15,6 +15,8 @@ import {
 } from 'lucide-react'
 import { exportCSV, exportJSON, parseBackupReport } from '../lib/backup'
 import { hashPin } from '../lib/pin'
+import { BiometricRow } from '../features/security/BiometricRow'
+import { disableBiometric } from '../lib/biometric'
 import { buildDemoData } from '../lib/demo'
 import { CURRENCIES } from '../lib/format'
 import { fmtDate, toDateStr } from '../lib/dates'
@@ -168,6 +170,7 @@ export default function Settings() {
                   onClick={async () => {
                     if (await ask({ title: '¿Quitar el PIN?', confirmLabel: 'Quitar' })) {
                       update({ pinHash: undefined })
+                      disableBiometric()
                       toast({ message: 'PIN desactivado' })
                     }
                   }}
@@ -180,6 +183,7 @@ export default function Settings() {
                 </Button>
               )}
             </Row>
+            {settings.pinHash && <BiometricRow />}
           </div>
         </Card>
 

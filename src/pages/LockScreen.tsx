@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { ArrowLeft, LoaderCircle, Lock, Mail, MailCheck } from 'lucide-react'
+import { ArrowLeft, Fingerprint, LoaderCircle, Lock, Mail, MailCheck } from 'lucide-react'
+import { biometricLabel, disableBiometric, hasBiometric, unlockWithBiometric } from '../lib/biometric'
 import { clearPinFailures, hashPin, isLegacyPin, pinWaitMs, registerPinFailure, verifyPin } from '../lib/pin'
 import { useStore } from '../lib/store'
 import { ask, toast } from '../lib/ui'
@@ -15,6 +16,7 @@ const formatWait = (ms: number) => (ms >= 60_000 ? `${Math.ceil(ms / 60_000)} mi
 
 const removePin = (onUnlock: () => void) => {
   useStore.getState().updateSettings({ pinHash: undefined })
+  disableBiometric()
   clearPinFailures()
   onUnlock()
   toast({ message: '🔓 PIN quitado. Puedes poner uno nuevo en Ajustes.', tone: 'good' })
@@ -184,6 +186,19 @@ export default function LockScreen({ onUnlock }: { onUnlock: () => void }) {
   // Tras varios intentos fallidos hay que esperar antes de probar otra vez
   const [wait, setWait] = useState(() => pinWaitMs())
   const waiting = wait > 0
+  const bio = hasBiometric()
+  const tryBio = async () => {
+    if (await unlockWithBiometric()) {
+      clearPinFailures()
+      onUnlock()
+    }
+  }
+
+  // Al abrir se pide la cara o la huella de inmediato (si el teléfono lo permite sin tocar nada)
+  useEffect(() => {
+    if (bio && !fromEmailLink) void tryBio()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Al volver con el link del correo se muestra directo la opción de quitar el PIN
   useEffect(() => {
@@ -226,6 +241,11 @@ export default function LockScreen({ onUnlock }: { onUnlock: () => void }) {
             <p role="alert" className="mt-6 text-center text-sm font-semibold text-bad">
               Demasiados intentos. Prueba de nuevo en {formatWait(wait)}.
             </p>
+          )}
+          {bio && (
+            <Button variant="soft" className="mt-6" icon={<Fingerprint className="size-5" />} onClick={() => void tryBio()}>
+              Usar {biometricLabel()}
+            </Button>
           )}
           <button className="mt-8 text-sm font-semibold text-muted" onClick={() => setForgot(true)}>
             ¿Olvidaste tu PIN?
