@@ -6,11 +6,11 @@
  */
 export const LEGAL = {
   /** Quién ofrece la app (persona o empresa) */
-  owner: '[NOMBRE DEL RESPONSABLE]',
+  owner: 'Benjamín Vallejos',
   /** Correo para consultas, solicitudes de datos y avisos de seguridad */
-  email: '[CORREO DE CONTACTO]',
+  email: 'Benjamin10vallejos@gmail.com',
   /** Ciudad y país del responsable */
-  place: '[CIUDAD], Chile',
+  place: 'Santiago, Chile',
   /** Edad mínima para crear cuenta en la nube (validar con un abogado) */
   minAge: 18,
   /** Meses sin usar la cuenta antes de avisar y eliminarla */
@@ -18,9 +18,9 @@ export const LEGAL = {
   /** Días de aviso antes de cerrar la app */
   closingNoticeDays: 30,
   /** Región donde está el proyecto de Supabase */
-  cloudRegion: '[REGIÓN DE SUPABASE]',
-  /** Cuánto guarda Supabase sus copias de seguridad después de borrar algo */
-  backupDays: '[PLAZO DE COPIAS DE SUPABASE]',
+  cloudRegion: 'Brasil (São Paulo)',
+  /** Cuánto guarda Supabase sus copias de seguridad después de borrar algo (copias diarias de 7 días en sus planes Free y Pro) */
+  backupDays: '7 días',
 } as const
 
 /** Versión de Términos y Privacidad que acepta quien crea su cuenta */
