@@ -208,6 +208,7 @@ describe('guía de la app y conceptos', () => {
       '/garantias',
       '/resumen',
       '/automatico',
+      '/configurar',
       '/asistente',
       '/prestamos',
       '/suscripciones',

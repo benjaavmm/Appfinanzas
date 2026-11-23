@@ -22,6 +22,7 @@ import {
   Gift,
   Tags,
   Target,
+  ListChecks,
 } from 'lucide-react'
 import { vibrate } from '../../lib/hooks'
 import { openSheet } from '../../lib/ui'
@@ -52,6 +53,7 @@ export const NAV = [
         { to: '/cuenta', label: 'Mi cuenta', icon: CircleUser },
       ]
     : []),
+  { to: '/configurar', label: 'Configura tu app', icon: ListChecks },
   { to: '/ajustes', label: 'Ajustes', icon: Settings },
 ]
 
@@ -78,6 +80,10 @@ const MORE_ROUTES = [
   '/categorias',
   '/automatico',
   '/ajustes',
+  '/configurar',
+  '/privacidad',
+  '/terminos',
+  '/aviso-financiero',
   '/amigos',
   '/cuenta',
 ]

@@ -33,6 +33,7 @@ export default function More() {
     '/automatico': 'Agrega movimientos desde notificaciones',
     '/amigos': 'Préstamos compartidos',
     '/cuenta': auth.profile ? `@${auth.profile.username} · respaldado` : 'Inicia sesión y respalda',
+    '/configurar': 'Instálala, avisos, PIN y huella',
     '/ajustes': 'Tema, moneda, respaldo, PIN',
   }
   const colors: Record<string, string> = {
@@ -50,6 +51,7 @@ export default function More() {
     '/automatico': '#3987e5',
     '/amigos': '#0ea5b7',
     '/cuenta': '#6655f5',
+    '/configurar': '#1baf7a',
     '/ajustes': '#8a8f98',
   }
   const items = NAV.filter((n) => details[n.to])

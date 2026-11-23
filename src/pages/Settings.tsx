@@ -1,4 +1,5 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useLocation } from 'react-router'
 import {
   Download,
   FileSpreadsheet,
@@ -45,6 +46,13 @@ const Row = ({ title, text, children }: { title: string; text?: ReactNode; child
 
 export default function Settings() {
   const data = useData()
+  // Desde "Configura tu app" se llega directo a la opción
+  const focus = (useLocation().state as { focus?: string } | null)?.focus
+  useEffect(() => {
+    if (!focus) return
+    const t = window.setTimeout(() => document.getElementById(focus)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350)
+    return () => window.clearTimeout(t)
+  }, [focus])
   const { settings } = data
   const update = useStore((s) => s.updateSettings)
   const signedIn = useAuth((s) => s.status === 'signedIn')
@@ -122,7 +130,7 @@ export default function Settings() {
           </div>
         </Card>
 
-        <Card>
+        <Card id="seguridad" className="scroll-mt-4">
           <h2 className="mb-3 font-bold">Apariencia y privacidad</h2>
           <Field label="Tema">
             <Segmented<ThemePref>
@@ -243,7 +251,9 @@ export default function Settings() {
           />
         </Card>
 
-        <RemindersCard />
+        <div id="recordatorios" className="scroll-mt-4">
+          <RemindersCard />
+        </div>
 
         <Card>
           <h2 className="mb-1 font-bold">Instalar en tu teléfono</h2>

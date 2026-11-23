@@ -19,7 +19,7 @@ const allText = (r: Reply) =>
     ...(r.suggestions ?? []),
   ].join('\n')
 const ROUTES =
-  /^\/(|movimientos|analisis|grupos(\/[\w-]+)?|deudas|garantias|resumen|asistente|prestamos|suscripciones|presupuestos|metas|cuentas|categorias|ajustes|mas|cuenta|amigos|automatico)$/
+  /^\/(|movimientos|analisis|grupos(\/[\w-]+)?|deudas|garantias|resumen|asistente|prestamos|suscripciones|presupuestos|metas|cuentas|categorias|ajustes|mas|cuenta|amigos|automatico|configurar)$/
 
 describe(`entiende ${REAL_QUESTIONS.length} preguntas reales`, () => {
   for (const q of REAL_QUESTIONS)

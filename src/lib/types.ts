@@ -189,6 +189,8 @@ export interface Settings {
   pinHash?: string
   /** Versión de Términos y Privacidad que aceptó y cuándo */
   legalConsent?: { version: string; at: string }
+  /** Ocultó la tarjeta "Configura tu app" del Inicio */
+  setupHidden?: boolean
   defaultAccountId?: ID
   onboarded: boolean
   reminders?: ReminderSettings

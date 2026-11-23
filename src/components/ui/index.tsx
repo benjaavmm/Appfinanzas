@@ -70,8 +70,19 @@ export const IconButton = ({
 
 /* ───────────── Superficies ───────────── */
 
-export const Card = ({ className, children, onClick }: { className?: string; children: ReactNode; onClick?: () => void }) => (
+export const Card = ({
+  className,
+  children,
+  onClick,
+  id,
+}: {
+  className?: string
+  children: ReactNode
+  onClick?: () => void
+  id?: string
+}) => (
   <div
+    id={id}
     onClick={onClick}
     className={cx(
       'rounded-3xl border border-line bg-surface p-4 shadow-card sm:p-5',

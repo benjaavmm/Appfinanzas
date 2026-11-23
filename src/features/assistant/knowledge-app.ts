@@ -464,8 +464,8 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     triggers: ['huella', 'bloqueo con huella', 'face id', 'reconocimiento facial', 'desbloquear con huella'],
     title: 'Bloqueo con huella',
     answer:
-      'Por ahora la app se bloquea con un **PIN de 4 dígitos** (todavía no con huella ni con la cara). Actívalo en **Ajustes → Bloqueo con PIN**.',
-    action: { label: 'Ir a Ajustes', kind: 'nav', to: '/ajustes' },
+      'Sí: si tu teléfono lo permite, puedes entrar con **huella**, **Face ID** o **Touch ID**. Primero pon un **PIN** en **Ajustes → Apariencia y privacidad**, y justo debajo enciende **Desbloquear con huella o Face ID**. El PIN sigue funcionando siempre, y tu cara o huella nunca salen del teléfono.',
+    action: { label: 'Configurar mi app', kind: 'nav', to: '/configurar' },
     related: ['¿Cómo pongo un PIN?'],
   },
   {
@@ -574,6 +574,26 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
       'Yo respondo casi todo sin internet. Si activas las **respuestas con IA de Google**, lo que no sé se lo pregunto a **Gemini** con un resumen de tus números (totales por categoría, tarjetas, metas y suscripciones; sin nombres de personas, lugares ni notas). Necesitas tener sesión iniciada y hay un límite de preguntas al día. Lo apagas cuando quieras.',
     steps: ['Toca la **carita** arriba a la derecha en esta pantalla.', 'Enciende **Respuestas con IA de Google**.'],
     related: ['¿Mis datos están seguros?', '¿Qué puedes hacer?'],
+  },
+  {
+    id: 'configurar-app',
+    kind: 'app',
+    triggers: [
+      'configura tu app',
+      'configurar la app',
+      'que debo configurar',
+      'primeros pasos',
+      'como empiezo a usar la app',
+      'que hago primero',
+      'activar la huella',
+      'activar face id',
+      'desbloquear con huella',
+    ],
+    title: 'Configura tu app',
+    answer:
+      'En **Más → Configura tu app** tienes los pasos importantes y cuáles ya hiciste en este teléfono: **instalarla**, **activar los recordatorios**, poner un **PIN**, entrar con **huella o Face ID** y **respaldar** tus datos con una cuenta. Cada paso tiene su botón.',
+    action: { label: 'Configurar mi app', kind: 'nav', to: '/configurar' },
+    related: ['¿Cómo instalo la app?', '¿Cómo activo las notificaciones?'],
   },
   {
     id: 'dividir-cuenta',

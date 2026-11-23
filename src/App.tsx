@@ -46,6 +46,7 @@ const DebtPlan = lazy(() => import('./pages/DebtPlan'))
 const Warranties = lazy(() => import('./pages/Warranties'))
 const Wrapped = lazy(() => import('./pages/Wrapped'))
 const Legal = lazy(() => import('./pages/Legal'))
+const Setup = lazy(() => import('./pages/Setup'))
 
 const LOCK_AFTER_MS = 60_000
 const ACTIVE_KEY = 'mf-last-active'
@@ -121,6 +122,7 @@ const AppRoutes = () => {
         <Route path="/resumen" element={<Wrapped />} />
         <Route path="/grupos/:id" element={<GroupDetail />} />
         <Route path="/unirse/:code" element={<GroupJoin />} />
+        <Route path="/configurar" element={<Setup />} />
         <Route path="/privacidad" element={<Legal doc="privacidad" />} />
         <Route path="/terminos" element={<Legal doc="terminos" />} />
         <Route path="/aviso-financiero" element={<Legal doc="aviso-financiero" />} />

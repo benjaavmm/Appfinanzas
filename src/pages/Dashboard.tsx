@@ -39,6 +39,7 @@ import { Avatar } from '../components/forms/LoanForms'
 import { TxItem } from '../components/TxItem'
 import { QuickAddBar } from '../features/quick/QuickAddBar'
 import { GroupsDashCard } from '../features/groups/GroupsDashCard'
+import { SetupDashCard } from '../features/setup/SetupDashCard'
 import { FutureCard } from '../features/future/FutureCard'
 import { WrappedDashCard } from '../features/wrapped/WrappedDashCard'
 import { AnimatedMoney, Card, cx, DeltaPill, EmptyState, IconButton, ProgressBar, Ring, SectionHeader } from '../components/ui'
@@ -233,6 +234,7 @@ export default function Dashboard() {
             ))}
           </div>
 
+          <SetupDashCard />
           <WrappedDashCard />
           <GroupsDashCard />
 
