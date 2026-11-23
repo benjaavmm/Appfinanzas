@@ -1,6 +1,6 @@
 /**
  * "Configura tu app": los pasos importantes y si ya están listos en ESTE teléfono (instalarla,
- * recordatorios, PIN, huella o Face ID y respaldo en la nube).
+ * cartola del banco, recordatorios, PIN, huella o Face ID y respaldo en la nube).
  */
 import { useEffect, useState } from 'react'
 import { biometricLabel, biometricSupported, hasBiometric } from '../../lib/biometric'
@@ -9,7 +9,7 @@ import { cloudConfigured } from '../../lib/cloud/client'
 import { isIOS, usePwa } from '../../lib/pwa'
 import { useStore } from '../../lib/store'
 
-export type SetupStepId = 'install' | 'reminders' | 'pin' | 'biometric' | 'backup'
+export type SetupStepId = 'install' | 'statement' | 'reminders' | 'pin' | 'biometric' | 'backup'
 
 export interface SetupStep {
   id: SetupStepId
@@ -26,6 +26,7 @@ export const useSetupSteps = () => {
   const installed = usePwa((s) => s.installed)
   const pinHash = useStore((s) => s.settings.pinHash)
   const remindersOn = useStore((s) => !!s.settings.reminders?.enabled)
+  const statementDone = useStore((s) => !!s.settings.statementDone)
   const signedIn = useAuth((s) => s.status === 'signedIn')
   const [bioSupported, setBioSupported] = useState<boolean | null>(null)
   const [bio, setBio] = useState(hasBiometric)
@@ -60,6 +61,12 @@ export const useSetupSteps = () => {
       title: 'Instala la app en tu teléfono',
       why: 'Se abre como una app normal, a pantalla completa y funciona sin internet.',
       done: installed,
+    },
+    {
+      id: 'statement',
+      title: 'Sube la cartola de tu banco',
+      why: 'Es la forma más rápida de ver en qué se te va la plata: la app ordena por categoría tus gastos anteriores y desde ya te ayuda a preparar los siguientes.',
+      done: statementDone,
     },
     {
       id: 'reminders',

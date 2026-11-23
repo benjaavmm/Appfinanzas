@@ -1,9 +1,9 @@
 import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
-import { Bell, Check, CloudUpload, Fingerprint, Lock, Smartphone } from 'lucide-react'
+import { Bell, Check, CloudUpload, FileUp, Fingerprint, Lock, Smartphone } from 'lucide-react'
 import { promptInstall, isIOS, usePwa } from '../lib/pwa'
 import { useStore } from '../lib/store'
-import { toast } from '../lib/ui'
+import { openSheet, toast } from '../lib/ui'
 import { vibrate } from '../lib/hooks'
 import { syncPush } from '../lib/cloud/push'
 import { checkRemindersSoon, enableReminders } from '../features/reminders/notify'
@@ -13,6 +13,7 @@ import { Button, Card, cx, PageHeader } from '../components/ui'
 
 const ICONS: Record<SetupStepId, typeof Bell> = {
   install: Smartphone,
+  statement: FileUp,
   reminders: Bell,
   pin: Lock,
   biometric: Fingerprint,
@@ -47,6 +48,28 @@ const InstallHow = () =>
       </li>
     </ol>
   )
+
+/** Cómo conseguir la cartola y en qué formato */
+const StatementHow = () => (
+  <div className="space-y-3">
+    <ol className="list-decimal space-y-1 pl-5 text-sm text-ink-2">
+      <li>
+        Entra a la web o app de tu banco y busca <b>Cartola</b> o <b>Últimos movimientos</b> (de tu cuenta corriente, vista o
+        tarjeta).
+      </li>
+      <li>
+        Descárgala en <b>Excel (.xls o .xlsx)</b> o <b>CSV</b>. El PDF no sirve.
+      </li>
+      <li>
+        Toca <b>Subir cartola</b>, elige el archivo y revisa los movimientos antes de guardarlos.
+      </li>
+    </ol>
+    <p className="text-xs text-muted">
+      Funciona con BancoEstado, Santander, BCI, Banco de Chile, Itaú, Scotiabank y otros. Mientras más meses subas, mejor ves tus
+      gastos de siempre.
+    </p>
+  </div>
+)
 
 const StepCard = ({ n, step, children }: { n: number; step: SetupStep; children?: ReactNode }) => {
   const Icon = ICONS[step.id]
@@ -139,6 +162,19 @@ export default function Setup() {
               ) : (
                 <InstallHow />
               ))}
+            {step.id === 'statement' && (
+              <>
+                <StatementHow />
+                <div className="flex flex-wrap gap-2">
+                  <Button icon={<FileUp className="size-4" />} onClick={() => openSheet({ kind: 'import' })}>
+                    Subir cartola
+                  </Button>
+                  <Button variant="secondary" onClick={() => useStore.getState().updateSettings({ statementDone: true })}>
+                    Ya la subí o no tengo
+                  </Button>
+                </div>
+              </>
+            )}
             {step.id === 'reminders' && (
               <Button icon={<Bell className="size-4" />} disabled={busy} onClick={() => void turnOnReminders()}>
                 Activar recordatorios

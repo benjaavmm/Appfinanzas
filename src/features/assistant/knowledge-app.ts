@@ -591,7 +591,7 @@ export const APP_KNOWLEDGE: KnowledgeEntry[] = [
     ],
     title: 'Configura tu app',
     answer:
-      'En **Más → Configura tu app** tienes los pasos importantes y cuáles ya hiciste en este teléfono: **instalarla**, **activar los recordatorios**, poner un **PIN**, entrar con **huella o Face ID** y **respaldar** tus datos con una cuenta. Cada paso tiene su botón.',
+      'En **Más → Configura tu app** tienes los pasos importantes y cuáles ya hiciste en este teléfono: **instalarla**, **subir la cartola de tu banco** (en Excel o CSV) para ver al tiro tus gastos anteriores, **activar los recordatorios**, poner un **PIN**, entrar con **huella o Face ID** y **respaldar** tus datos con una cuenta. Cada paso tiene su botón.',
     action: { label: 'Configurar mi app', kind: 'nav', to: '/configurar' },
     related: ['¿Cómo instalo la app?', '¿Cómo activo las notificaciones?'],
   },

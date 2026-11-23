@@ -429,6 +429,8 @@ export const ImportSheet = ({ open, onClose }: { open: boolean; onClose: () => v
     if (!account || !totals.count) return
     const txs = toTransactions(items, selected, overrides, account.id)
     const result = applyImport(useStore.getState, txs, account.id, keepBalance)
+    if (result.ids.length && !useStore.getState().settings.statementDone)
+      useStore.getState().updateSettings({ statementDone: true })
     vibrate(14)
     toast({
       message: `Importaste ${plural(result.ids.length, 'movimiento', 'movimientos')}`,

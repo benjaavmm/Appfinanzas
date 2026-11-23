@@ -283,6 +283,8 @@ export const sanitizeData = (r: Record<string, unknown>, version: number): Sanit
       hideAmounts: bool(s.hideAmounts),
       legalConsent: consent(s.legalConsent),
       setupHidden: bool(s.setupHidden),
+      setupSnoozedUntil: dateStr(s.setupSnoozedUntil),
+      statementDone: bool(s.statementDone),
       defaultAccountId: defaultAccountId && accounts.some((a) => a.id === defaultAccountId) ? defaultAccountId : accounts[0]?.id,
       reminders: rem
         ? clean({

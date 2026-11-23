@@ -189,8 +189,12 @@ export interface Settings {
   pinHash?: string
   /** Versión de Términos y Privacidad que aceptó y cuándo */
   legalConsent?: { version: string; at: string }
-  /** Ocultó la tarjeta "Configura tu app" del Inicio */
+  /** (Antiguo) Ocultó la tarjeta "Configura tu app" del Inicio. Ya no se usa: la tarjeta vuelve hasta terminar */
   setupHidden?: boolean
+  /** La tarjeta "Configura tu app" no se muestra en el Inicio hasta esta fecha (la persona la cerró) */
+  setupSnoozedUntil?: DateStr
+  /** Ya subió una cartola (o dijo que no tiene / ya lo hizo) */
+  statementDone?: boolean
   defaultAccountId?: ID
   onboarded: boolean
   reminders?: ReminderSettings
